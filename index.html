@@ -78,8 +78,8 @@
         </div>
     </div>
 
-    <!-- Load ethers -->
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script> 
+    <!-- Load ethers library (corrected version) -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
     <script>
         // Configuration
@@ -90,8 +90,8 @@
             'function balanceOf(address account) view returns (uint256)'
         ];
 
-        // IMPORTANT: Replace this with your own wallet address to become admin
-        const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899']; // <-- CHANGE THIS
+        // Your admin wallet address (now correctly inserted)
+        const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899'];
 
         // Global variables
         let provider, signer, fundContract, userAddress, isAdmin = false;
@@ -153,7 +153,7 @@
                 appDiv.classList.remove('hidden');
 
                 // Check if admin
-                isAdmin = ADMIN_WALLETS.includes(());
+                isAdmin = ADMIN_WALLETS.includes(userAddress.toLowerCase());
                 if (!isAdmin) adminTab.style.display = 'none';
 
                 // Refresh UI
@@ -250,7 +250,7 @@
             if (!post.comments) post.comments = [];
             post.comments.push({
                 userWallet: userAddress,
-                username: 'User', // you could store username from user profile
+                username: 'User',
                 content: text,
                 timestamp: Date.now()
             });
@@ -266,7 +266,7 @@
             posts.push({
                 id: Date.now(),
                 author: userAddress,
-                username: 'User', // you can later add profile system
+                username: 'User',
                 content,
                 imageUrl,
                 likes: [],
@@ -343,7 +343,6 @@
                 const tx = await fundContract.transfer(creator, amountWei);
                 alert(`Donation sent! Tx: ${tx.hash}`);
                 await tx.wait();
-                // Update campaign raised amount
                 const campaign = campaigns.find(c => c.id == campaignId);
                 if (campaign) {
                     campaign.raised = (campaign.raised || 0) + parseFloat(amount);
@@ -356,7 +355,6 @@
             }
         }
 
-        // ============ TIPPING (reused from earlier) ============
         async function sendTip(recipient) {
             if (!userAddress) return alert('Connect wallet first');
             const amount = prompt('Enter amount to tip (FUND):');
@@ -373,7 +371,6 @@
             }
         }
 
-        // ============ SHARING ============
         function shareContent(data) {
             const shareData = {
                 title: data.title || 'Social Funders Network',
@@ -397,7 +394,6 @@
             });
         }
 
-        // ============ ADMIN FUNCTIONS ============
         function renderAdminPanels() {
             if (!isAdmin) return;
             const adminPosts = document.getElementById('adminPostsList');
