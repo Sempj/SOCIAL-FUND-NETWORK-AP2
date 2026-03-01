@@ -1,88 +1,103 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social Funders Network</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        button { padding: 10px 15px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; background: #4CAF50; color: white; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f5f7fa; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 20px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a1a1a; font-size: 1.8rem; margin-bottom: 20px; }
+        h1 span { background: #4CAF50; color: white; padding: 2px 10px; border-radius: 30px; font-size: 0.9rem; margin-left: 10px; }
+        button { padding: 12px 16px; margin: 5px; border: none; border-radius: 30px; cursor: pointer; background: #4CAF50; color: white; font-weight: 600; transition: 0.2s; }
+        button:hover { opacity: 0.9; transform: scale(0.98); }
         button.secondary { background: #2196F3; }
         button.danger { background: #f44336; }
-        input, textarea { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; }
-        .card { background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; padding: 15px; margin: 10px 0; }
+        button.follow-btn { background: #ff9800; }
+        input, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 12px; font-size: 1rem; }
+        textarea { min-height: 80px; resize: vertical; }
+        .card { background: #f9f9f9; border-radius: 16px; padding: 16px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .hidden { display: none; }
-        .tabs { display: flex; gap: 10px; margin: 20px 0; }
-        .tab { flex: 1; padding: 10px; background: #ddd; text-align: center; cursor: pointer; border-radius: 5px; }
+        .tabs { display: flex; gap: 8px; margin: 20px 0; overflow-x: auto; white-space: nowrap; padding-bottom: 5px; }
+        .tab { flex: 0 0 auto; padding: 10px 20px; background: #e0e0e0; border-radius: 30px; cursor: pointer; font-weight: 600; }
         .tab.active { background: #4CAF50; color: white; }
-        .wallet-info { background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px; word-break: break-all; }
-        .post-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
-        .comment { margin-left: 20px; padding: 5px; border-left: 2px solid #ccc; }
-        .progress { width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden; margin: 10px 0; }
-        .progress-bar { height: 100%; background: #4CAF50; }
+        .wallet-info { background: #e3f2fd; padding: 15px; border-radius: 16px; margin-bottom: 20px; word-break: break-all; border: 1px solid #bbdefb; }
+        .post-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .post-actions button { padding: 8px 16px; font-size: 0.9rem; }
+        .comment { margin-left: 20px; padding: 8px; border-left: 3px solid #4CAF50; background: #f1f1f1; border-radius: 8px; margin-top: 8px; }
+        .progress { width: 100%; height: 20px; background: #eee; border-radius: 30px; overflow: hidden; margin: 10px 0; }
+        .progress-bar { height: 100%; background: #4CAF50; width: 0%; }
         .share-button { background: #ff9800; }
+        img { max-width: 100%; border-radius: 12px; margin-top: 10px; }
+        .feed-toggle { display: flex; gap: 10px; margin: 10px 0; }
+        .feed-toggle button { flex: 1; background: #e0e0e0; color: #333; }
+        .feed-toggle button.active { background: #4CAF50; color: white; }
+        .footer-note { text-align: center; color: #888; font-size: 0.8rem; margin-top: 30px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Social Funders Network</h1>
+        <h1>Social Funders Network <span>Base</span></h1>
 
         <!-- Wallet Connection -->
         <div id="walletSection">
-            <button id="connectBtn">Connect Wallet</button>
+            <button id="connectBtn">🔌 Connect Wallet</button>
             <div id="walletInfo" class="wallet-info hidden"></div>
         </div>
 
         <!-- Main App (visible after connection) -->
         <div id="app" class="hidden">
             <div class="tabs">
-                <div class="tab active" data-tab="feed">Feed</div>
-                <div class="tab" data-tab="campaigns">Campaigns</div>
-                <div class="tab" data-tab="admin" id="adminTab">Admin</div>
+                <div class="tab active" data-tab="feed">📰 Feed</div>
+                <div class="tab" data-tab="campaigns">🎯 Campaigns</div>
+                <div class="tab" data-tab="admin" id="adminTab">🛡️ Admin</div>
             </div>
 
             <!-- Feed Tab -->
             <div id="feedTab" class="tab-content">
-                <h3>Create Post</h3>
-                <textarea id="postContent" placeholder="What's happening?"></textarea>
-                <input id="postImage" placeholder="Image URL (optional)">
-                <button id="createPostBtn">Post</button>
+                <h3>📝 Create Post</h3>
+                <textarea id="postContent" placeholder="What's on your mind?"></textarea>
+                <input id="postImage" placeholder="🖼️ Image URL (optional)">
+                <button id="createPostBtn">📢 Post</button>
 
-                <h3>Feed</h3>
+                <h3>📰 Feed</h3>
+                <div class="feed-toggle">
+                    <button id="feedAllBtn" class="active">🌐 All Posts</button>
+                    <button id="feedFollowingBtn">👥 Following</button>
+                </div>
                 <div id="postsList"></div>
             </div>
 
             <!-- Campaigns Tab -->
             <div id="campaignsTab" class="tab-content hidden">
-                <h3>Start a Campaign</h3>
-                <input id="campaignTitle" placeholder="Title">
-                <textarea id="campaignDescription" placeholder="Description"></textarea>
+                <h3>🙌 Apply for Donations (Start a Campaign)</h3>
+                <input id="campaignTitle" placeholder="Campaign Title">
+                <textarea id="campaignDescription" placeholder="Describe your campaign..."></textarea>
                 <input id="campaignGoal" type="number" placeholder="Goal (FUND)">
                 <input id="campaignDeadline" type="date" placeholder="Deadline">
-                <button id="createCampaignBtn">Create Campaign</button>
+                <button id="createCampaignBtn">🚀 Start Campaign</button>
 
-                <h3>Active Campaigns</h3>
+                <h3>🔥 Active Campaigns (Donate Here)</h3>
                 <div id="campaignsList"></div>
             </div>
 
             <!-- Admin Tab -->
             <div id="adminTab" class="tab-content hidden">
-                <h3>Manage Posts</h3>
+                <h3>🛠️ Manage Posts</h3>
                 <div id="adminPostsList"></div>
-                <h3>Manage Campaigns</h3>
+                <h3>🛠️ Manage Campaigns</h3>
                 <div id="adminCampaignsList"></div>
             </div>
         </div>
+        <div class="footer-note">© 2026 Social Funders Network – powered by FUND token on Base</div>
     </div>
 
-    <!-- Load ethers library (corrected version) -->
+    <!-- Load ethers -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
     <script>
-        // Configuration
+        // ================== CONFIGURATION ==================
         const FUND_ADDRESS = '0x06396aa215ef3fa2945c535be9c2ddc4e80a9b07';
         const FUND_ABI = [
             'function transfer(address to, uint256 amount) returns (bool)',
@@ -90,39 +105,43 @@
             'function balanceOf(address account) view returns (uint256)'
         ];
 
-        // Your admin wallet address (full and correct)
+        // YOUR ADMIN WALLET (already set)
         const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899'];
 
-        // Global variables
+        // Global state
         let provider, signer, fundContract, userAddress, isAdmin = false;
-        let posts = [], campaigns = [];
+        let posts = [], campaigns = [], following = [];
 
-        // Load data from localStorage
+        // ================== LOCAL STORAGE ==================
         function loadData() {
             const savedPosts = localStorage.getItem('sfn_posts');
             const savedCampaigns = localStorage.getItem('sfn_campaigns');
+            const savedFollowing = localStorage.getItem('sfn_following');
             posts = savedPosts ? JSON.parse(savedPosts) : [];
             campaigns = savedCampaigns ? JSON.parse(savedCampaigns) : [];
+            following = savedFollowing ? JSON.parse(savedFollowing) : [];
         }
         function saveData() {
             localStorage.setItem('sfn_posts', JSON.stringify(posts));
             localStorage.setItem('sfn_campaigns', JSON.stringify(campaigns));
+            localStorage.setItem('sfn_following', JSON.stringify(following));
         }
-
-        // Initialize
         loadData();
 
-        // DOM elements
+        // ================== DOM ELEMENTS ==================
         const connectBtn = document.getElementById('connectBtn');
         const walletInfo = document.getElementById('walletInfo');
         const appDiv = document.getElementById('app');
         const tabs = document.querySelectorAll('.tab');
         const adminTab = document.getElementById('adminTab');
+        const feedAllBtn = document.getElementById('feedAllBtn');
+        const feedFollowingBtn = document.getElementById('feedFollowingBtn');
+        let currentFeed = 'all'; // 'all' or 'following'
 
-        // Wallet connection
+        // ================== WALLET CONNECTION ==================
         connectBtn.addEventListener('click', async () => {
             if (!window.ethereum) {
-                alert('No wallet detected. Please open in Trust Wallet or MetaMask browser.');
+                alert('❌ No wallet detected. Please open in Trust Wallet (Browser) or MetaMask.');
                 return;
             }
             try {
@@ -131,32 +150,32 @@
                 signer = provider.getSigner();
                 userAddress = await signer.getAddress();
 
-                // Check network
+                // Check Base network
                 const network = await provider.getNetwork();
                 if (network.chainId !== 8453) {
-                    alert('Please switch to Base network.');
+                    alert('⚠️ Please switch to Base network (Chain ID 8453) in your wallet.');
                     return;
                 }
 
-                // Initialize contract
+                // Get token info
                 fundContract = new ethers.Contract(FUND_ADDRESS, FUND_ABI, signer);
                 const decimals = await fundContract.decimals();
                 const balance = await fundContract.balanceOf(userAddress);
+                const formattedBalance = ethers.utils.formatUnits(balance, decimals);
 
-                // Display wallet info
                 walletInfo.innerHTML = `
-                    <strong>Connected:</strong> ${userAddress}<br>
-                    <strong>FUND Balance:</strong> ${ethers.utils.formatUnits(balance, decimals)}
+                    <strong>✅ Connected:</strong> ${userAddress}<br>
+                    <strong>💰 FUND Balance:</strong> ${parseFloat(formattedBalance).toFixed(2)} FUND
                 `;
                 walletInfo.classList.remove('hidden');
                 connectBtn.style.display = 'none';
                 appDiv.classList.remove('hidden');
 
-                // Check if admin
+                // Admin check
                 isAdmin = ADMIN_WALLETS.includes(userAddress.toLowerCase());
                 if (!isAdmin) adminTab.style.display = 'none';
 
-                // Refresh UI
+                // Render everything
                 renderFeed();
                 renderCampaigns();
                 if (isAdmin) renderAdminPanels();
@@ -165,7 +184,7 @@
             }
         });
 
-        // Tab switching
+        // ================== TAB SWITCHING ==================
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const tabName = tab.dataset.tab;
@@ -174,36 +193,84 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                 document.getElementById(tabName + 'Tab').classList.remove('hidden');
                 if (tabName === 'admin' && isAdmin) renderAdminPanels();
+                if (tabName === 'feed') renderFeed(); // re-render feed when switching back
             });
         });
 
-        // ============ FEED FUNCTIONS ============
+        // ================== FEED TOGGLE ==================
+        feedAllBtn.addEventListener('click', () => {
+            currentFeed = 'all';
+            feedAllBtn.classList.add('active');
+            feedFollowingBtn.classList.remove('active');
+            renderFeed();
+        });
+        feedFollowingBtn.addEventListener('click', () => {
+            currentFeed = 'following';
+            feedFollowingBtn.classList.add('active');
+            feedAllBtn.classList.remove('active');
+            renderFeed();
+        });
+
+        // ================== FOLLOW FUNCTIONS ==================
+        function toggleFollow(author) {
+            if (!userAddress) return alert('Connect wallet first');
+            if (author === userAddress) return alert('You cannot follow yourself');
+            const index = following.indexOf(author);
+            if (index === -1) {
+                following.push(author);
+            } else {
+                following.splice(index, 1);
+            }
+            saveData();
+            renderFeed(); // refresh to update button states
+        }
+
+        function isFollowing(author) {
+            return following.includes(author);
+        }
+
+        // ================== FEED FUNCTIONS ==================
         function renderFeed() {
             const postsList = document.getElementById('postsList');
-            postsList.innerHTML = posts.map(post => `
+            let filteredPosts = posts.slice().reverse(); // newest first
+
+            if (currentFeed === 'following') {
+                filteredPosts = filteredPosts.filter(post => following.includes(post.author));
+            }
+
+            if (filteredPosts.length === 0) {
+                postsList.innerHTML = '<p style="text-align:center; color:#888;">No posts to show. Try switching feed or following someone!</p>';
+                return;
+            }
+
+            postsList.innerHTML = filteredPosts.map(post => {
+                const followBtnText = isFollowing(post.author) ? '✅ Following' : '➕ Follow';
+                const followBtnDisabled = (post.author === userAddress) ? 'disabled' : '';
+                return `
                 <div class="card" data-post-id="${post.id}">
-                    <div><strong>${post.username || post.author}</strong></div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div><strong>${post.username || post.author.slice(0,6)+'...'+post.author.slice(-4)}</strong></div>
+                        ${userAddress && post.author !== userAddress ? `<button class="follow-btn" data-author="${post.author}" ${followBtnDisabled}>${followBtnText}</button>` : ''}
+                    </div>
                     <p>${post.content}</p>
-                    ${post.imageUrl ? `<img src="${post.imageUrl}" style="max-width:100%; max-height:200px;">` : ''}
+                    ${post.imageUrl ? `<img src="${post.imageUrl}" alt="post image" onerror="this.style.display='none'">` : ''}
                     <div class="post-actions">
                         <button class="like-btn" data-id="${post.id}">❤️ ${post.likes ? post.likes.length : 0}</button>
                         <button class="comment-toggle" data-id="${post.id}">💬 Comments</button>
                         <button class="tip-btn" data-recipient="${post.author}">💸 Tip</button>
-                        <button class="share-btn share-button" data-title="Check out this post!" data-text="${post.content.substring(0,50)}" data-url="https://yourapp.com/posts/${post.id}">🔗 Share</button>
+                        <button class="share-btn share-button" data-title="Check out this post!" data-text="${post.content.substring(0,50)}" data-url="${window.location.origin}/posts/${post.id}">🔗 Share</button>
                     </div>
                     <div class="comments-section hidden" id="comments-${post.id}">
                         ${(post.comments || []).map(c => `
-                            <div class="comment">
-                                <strong>${c.username || c.userWallet}</strong>: ${c.content}
-                            </div>
+                            <div class="comment"><strong>${c.username || c.userWallet.slice(0,6)}:</strong> ${c.content}</div>
                         `).join('')}
                         <div style="margin-top:10px;">
-                            <input type="text" placeholder="Add comment..." id="comment-input-${post.id}">
-                            <button class="add-comment" data-id="${post.id}">Post</button>
+                            <input type="text" placeholder="Add a comment..." id="comment-input-${post.id}">
+                            <button class="add-comment" data-id="${post.id}">💬 Post</button>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             // Attach event listeners
             document.querySelectorAll('.like-btn').forEach(btn => {
@@ -220,6 +287,12 @@
             });
             document.querySelectorAll('.share-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => shareContent(e.target.dataset));
+            });
+            document.querySelectorAll('.follow-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const author = e.target.dataset.author;
+                    toggleFollow(author);
+                });
             });
         }
 
@@ -250,7 +323,7 @@
             if (!post.comments) post.comments = [];
             post.comments.push({
                 userWallet: userAddress,
-                username: 'User',
+                username: userAddress.slice(0,6)+'...'+userAddress.slice(-4),
                 content: text,
                 timestamp: Date.now()
             });
@@ -266,7 +339,7 @@
             posts.push({
                 id: Date.now(),
                 author: userAddress,
-                username: 'User',
+                username: userAddress.slice(0,6)+'...'+userAddress.slice(-4),
                 content,
                 imageUrl,
                 likes: [],
@@ -279,22 +352,26 @@
             renderFeed();
         });
 
-        // ============ CAMPAIGN FUNCTIONS ============
+        // ================== CAMPAIGN FUNCTIONS ==================
         function renderCampaigns() {
             const campaignsList = document.getElementById('campaignsList');
-            campaignsList.innerHTML = campaigns.map(camp => `
+            if (campaigns.length === 0) {
+                campaignsList.innerHTML = '<p style="text-align:center; color:#888;">No active campaigns. Start one now!</p>';
+                return;
+            }
+            campaignsList.innerHTML = campaigns.filter(c => c.status === 'active').map(camp => `
                 <div class="card">
                     <h4>${camp.title}</h4>
                     <p>${camp.description}</p>
                     <p><strong>Goal:</strong> ${camp.goal} FUND</p>
                     <p><strong>Raised:</strong> ${camp.raised || 0} FUND</p>
                     <div class="progress">
-                        <div class="progress-bar" style="width:${Math.min(100, (camp.raised || 0)/camp.goal*100)}%"></div>
+                        <div class="progress-bar" style="width:${Math.min(100, ((camp.raised || 0)/camp.goal)*100)}%"></div>
                     </div>
                     <p><strong>Deadline:</strong> ${camp.deadline}</p>
                     <div class="post-actions">
                         <button class="donate-btn" data-creator="${camp.creator}" data-id="${camp.id}">💰 Donate</button>
-                        <button class="share-btn share-button" data-title="Support this campaign!" data-text="${camp.title}" data-url="https://yourapp.com/campaigns/${camp.id}">🔗 Share</button>
+                        <button class="share-btn share-button" data-title="Support this campaign!" data-text="${camp.title}" data-url="${window.location.origin}/campaigns/${camp.id}">🔗 Share</button>
                     </div>
                 </div>
             `).join('');
@@ -313,7 +390,7 @@
             const desc = document.getElementById('campaignDescription').value.trim();
             const goal = parseFloat(document.getElementById('campaignGoal').value);
             const deadline = document.getElementById('campaignDeadline').value;
-            if (!title || !desc || !goal || !deadline) return alert('Fill all fields');
+            if (!title || !desc || !goal || !deadline) return alert('Please fill all fields');
             campaigns.push({
                 id: Date.now(),
                 creator: userAddress,
@@ -341,7 +418,7 @@
                 const decimals = await fundContract.decimals();
                 const amountWei = ethers.utils.parseUnits(amount, decimals);
                 const tx = await fundContract.transfer(creator, amountWei);
-                alert(`Donation sent! Tx: ${tx.hash}`);
+                alert(`✅ Donation sent! Tx: ${tx.hash}`);
                 await tx.wait();
                 const campaign = campaigns.find(c => c.id == campaignId);
                 if (campaign) {
@@ -349,12 +426,13 @@
                     saveData();
                     renderCampaigns();
                 }
-                alert('Transaction confirmed!');
+                alert('🎉 Transaction confirmed!');
             } catch (err) {
-                alert('Donation failed: ' + err.message);
+                alert('❌ Donation failed: ' + err.message);
             }
         }
 
+        // ================== TIPPING ==================
         async function sendTip(recipient) {
             if (!userAddress) return alert('Connect wallet first');
             const amount = prompt('Enter amount to tip (FUND):');
@@ -363,14 +441,15 @@
                 const decimals = await fundContract.decimals();
                 const amountWei = ethers.utils.parseUnits(amount, decimals);
                 const tx = await fundContract.transfer(recipient, amountWei);
-                alert(`Tip sent! Tx: ${tx.hash}`);
+                alert(`💸 Tip sent! Tx: ${tx.hash}`);
                 await tx.wait();
-                alert('Transaction confirmed!');
+                alert('✅ Transaction confirmed!');
             } catch (err) {
-                alert('Tip failed: ' + err.message);
+                alert('❌ Tip failed: ' + err.message);
             }
         }
 
+        // ================== SHARING ==================
         function shareContent(data) {
             const shareData = {
                 title: data.title || 'Social Funders Network',
@@ -378,9 +457,7 @@
                 url: data.url || window.location.href,
             };
             if (navigator.share) {
-                navigator.share(shareData).catch(() => {
-                    copyToClipboard(shareData.url);
-                });
+                navigator.share(shareData).catch(() => copyToClipboard(shareData.url));
             } else {
                 copyToClipboard(shareData.url);
             }
@@ -388,36 +465,45 @@
 
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
-                alert('Link copied to clipboard!');
+                alert('🔗 Link copied to clipboard!');
             }).catch(() => {
                 alert('Could not copy link. Please copy manually: ' + text);
             });
         }
 
+        // ================== ADMIN FUNCTIONS ==================
         function renderAdminPanels() {
             if (!isAdmin) return;
             const adminPosts = document.getElementById('adminPostsList');
-            adminPosts.innerHTML = posts.map(post => `
-                <div class="card">
-                    <p><strong>${post.author}</strong>: ${post.content}</p>
-                    <button class="danger" data-action="deletePost" data-id="${post.id}">Delete Post</button>
-                </div>
-            `).join('');
-            document.querySelectorAll('[data-action="deletePost"]').forEach(btn => {
-                btn.addEventListener('click', () => deletePost(btn.dataset.id));
-            });
+            if (posts.length === 0) {
+                adminPosts.innerHTML = '<p>No posts to manage.</p>';
+            } else {
+                adminPosts.innerHTML = posts.map(post => `
+                    <div class="card">
+                        <p><strong>${post.author}</strong>: ${post.content}</p>
+                        <button class="danger" data-action="deletePost" data-id="${post.id}">❌ Delete Post</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('[data-action="deletePost"]').forEach(btn => {
+                    btn.addEventListener('click', () => deletePost(btn.dataset.id));
+                });
+            }
 
             const adminCampaigns = document.getElementById('adminCampaignsList');
-            adminCampaigns.innerHTML = campaigns.map(camp => `
-                <div class="card">
-                    <h4>${camp.title}</h4>
-                    <p>By: ${camp.creator}</p>
-                    <button class="danger" data-action="deleteCampaign" data-id="${camp.id}">Delete Campaign</button>
-                </div>
-            `).join('');
-            document.querySelectorAll('[data-action="deleteCampaign"]').forEach(btn => {
-                btn.addEventListener('click', () => deleteCampaign(btn.dataset.id));
-            });
+            if (campaigns.length === 0) {
+                adminCampaigns.innerHTML = '<p>No campaigns to manage.</p>';
+            } else {
+                adminCampaigns.innerHTML = campaigns.map(camp => `
+                    <div class="card">
+                        <h4>${camp.title}</h4>
+                        <p>By: ${camp.creator}</p>
+                        <button class="danger" data-action="deleteCampaign" data-id="${camp.id}">❌ Delete Campaign</button>
+                    </div>
+                `).join('');
+                document.querySelectorAll('[data-action="deleteCampaign"]').forEach(btn => {
+                    btn.addEventListener('click', () => deleteCampaign(btn.dataset.id));
+                });
+            }
         }
 
         function deletePost(postId) {
