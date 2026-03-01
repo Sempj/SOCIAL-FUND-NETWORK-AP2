@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wallet Test</title>
+</head>
+<body>
+    <h2>Wallet Connection Test</h2>
+    <button id="connect">Connect Wallet</button>
+    <p id="status"></p>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        document.getElementById('connect').onclick = async () => {
+            if (!window.ethereum) {
+                document.getElementById('status').innerText = 'No wallet detected. Make sure you are in Trust Wallet browser.';
+                return;
+            }
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                const signer = provider.getSigner();
+                const address = await signer.getAddress();
+                document.getElementById('status').innerText = 'Connected: ' + address;
+            } catch (err) {
+                document.getElementById('status').innerText = 'Error: ' + err.message;
+            }
+        };
+    </script>
+</body>
+</html>
