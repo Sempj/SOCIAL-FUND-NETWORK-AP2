@@ -231,6 +231,13 @@
         }
         i { margin-right: 5px; }
         img { max-width: 100%; border-radius: 15px; margin-top: 10px; }
+        .error-message {
+            color: #f44336;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(244, 67, 54, 0.1);
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -252,7 +259,7 @@
                 <div class="tab" data-tab="admin" id="adminTab"><i class="fas fa-shield-alt"></i> Admin</div>
             </div>
 
-            <!-- Feed Tab (unchanged) -->
+            <!-- Feed Tab -->
             <div id="feedTab" class="tab-content">
                 <h3><i class="fas fa-pen"></i> Create Post</h3>
                 <textarea id="postContent" placeholder="What's on your mind?"></textarea>
@@ -267,17 +274,16 @@
                 <div id="postsList"></div>
             </div>
 
-            <!-- NEW SWAP TAB -->
+            <!-- Swap Tab -->
             <div id="swapTab" class="tab-content hidden">
                 <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens</h3>
-                <p class="text-muted" style="font-size:0.9rem; margin-bottom:15px;">Swap any token for FUND directly in the app.</p>
+                <p style="font-size:0.9rem; margin-bottom:15px;">Swap any token for FUND directly in the app.</p>
                 
                 <div class="swap-box">
                     <div class="swap-row">
                         <select id="fromToken">
                             <option value="ETH">ETH</option>
                             <option value="USDC">USDC</option>
-                            <option value="DAI">DAI</option>
                         </select>
                         <input type="number" id="fromAmount" placeholder="0.0" step="any">
                     </div>
@@ -300,7 +306,6 @@
                     <div id="swapPriceInfo" class="price-info hidden">
                         <div><i class="fas fa-info-circle"></i> <span id="priceRate"></span></div>
                         <div><i class="fas fa-gas-pump"></i> Est. gas: <span id="gasEstimate"></span></div>
-                        <div><i class="fas fa-clock"></i> Est. time: <span id="timeEstimate">~30 seconds</span></div>
                     </div>
                     
                     <button id="executeSwapBtn" class="hidden" style="width:100%; margin-top:15px;">
@@ -316,7 +321,7 @@
                 </div>
             </div>
 
-            <!-- Campaigns Tab (unchanged) -->
+            <!-- Campaigns Tab -->
             <div id="campaignsTab" class="tab-content hidden">
                 <h3><i class="fas fa-hand-holding-usd"></i> Start a Campaign</h3>
                 <input id="campaignTitle" placeholder="Campaign Title">
@@ -329,7 +334,7 @@
                 <div id="campaignsList"></div>
             </div>
 
-            <!-- Admin Tab (unchanged) -->
+            <!-- Admin Tab -->
             <div id="adminTab" class="tab-content hidden">
                 <h3><i class="fas fa-tasks"></i> Manage Posts</h3>
                 <div id="adminPostsList"></div>
@@ -357,7 +362,6 @@
         const TOKENS = {
             'ETH': '0x0000000000000000000000000000000000000000', // Native ETH
             'USDC': '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-            'DAI': '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
             'FUND': FUND_ADDRESS
         };
 
@@ -368,17 +372,25 @@
 
         // ================== LOCAL STORAGE ==================
         function loadData() {
-            const savedPosts = localStorage.getItem('sfn_posts');
-            const savedCampaigns = localStorage.getItem('sfn_campaigns');
-            const savedFollowing = localStorage.getItem('sfn_following');
-            posts = savedPosts ? JSON.parse(savedPosts) : [];
-            campaigns = savedCampaigns ? JSON.parse(savedCampaigns) : [];
-            following = savedFollowing ? JSON.parse(savedFollowing) : [];
+            try {
+                const savedPosts = localStorage.getItem('sfn_posts');
+                const savedCampaigns = localStorage.getItem('sfn_campaigns');
+                const savedFollowing = localStorage.getItem('sfn_following');
+                posts = savedPosts ? JSON.parse(savedPosts) : [];
+                campaigns = savedCampaigns ? JSON.parse(savedCampaigns) : [];
+                following = savedFollowing ? JSON.parse(savedFollowing) : [];
+            } catch (e) {
+                console.error('Failed to load data', e);
+            }
         }
         function saveData() {
-            localStorage.setItem('sfn_posts', JSON.stringify(posts));
-            localStorage.setItem('sfn_campaigns', JSON.stringify(campaigns));
-            localStorage.setItem('sfn_following', JSON.stringify(following));
+            try {
+                localStorage.setItem('sfn_posts', JSON.stringify(posts));
+                localStorage.setItem('sfn_campaigns', JSON.stringify(campaigns));
+                localStorage.setItem('sfn_following', JSON.stringify(following));
+            } catch (e) {
+                console.error('Failed to save data', e);
+            }
         }
         loadData();
 
@@ -406,7 +418,7 @@
 
                 const network = await provider.getNetwork();
                 if (network.chainId !== 8453) {
-                    alert('⚠️ Please switch to Base network (Chain ID 8453).');
+                    alert('⚠️ Please switch to Base network (Chain ID 8453) in your wallet.');
                     return;
                 }
 
@@ -658,7 +670,7 @@
         function deletePost(postId) { if (!isAdmin) return; posts = posts.filter(p => p.id != postId); saveData(); renderFeed(); if (isAdmin) renderAdminPanels(); }
         function deleteCampaign(campaignId) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != campaignId); saveData(); renderCampaigns(); if (isAdmin) renderAdminPanels(); }
 
-        // ================== SWAP FUNCTIONS (NEW) ==================
+        // ================== SWAP FUNCTIONS ==================
         const getQuoteBtn = document.getElementById('getQuoteBtn');
         const executeSwapBtn = document.getElementById('executeSwapBtn');
         const fromAmount = document.getElementById('fromAmount');
@@ -669,7 +681,6 @@
         const gasEstimate = document.getElementById('gasEstimate');
         const swapStatus = document.getElementById('swapStatus');
 
-        // 0x API endpoint for Base
         const ZX_API_BASE = 'https://api.0x.org/swap/v1';
         
         getQuoteBtn.addEventListener('click', async () => {
@@ -689,19 +700,27 @@
             swapStatus.innerHTML = '<span style="color:#8e2de2;">🔍 Getting best price...</span>';
             
             try {
-                // Convert ETH to WETH address for 0x API (0x uses WETH for ETH trades)
+                // For ETH, we need to use WETH address for 0x API
                 const sellToken = from === 'ETH' ? '0x4200000000000000000000000000000000000006' : TOKENS[from];
                 const buyToken = TOKENS['FUND'];
                 
-                // Get quote from 0x API
+                const amountInWei = from === 'ETH' 
+                    ? ethers.utils.parseUnits(amount, 18).toString()
+                    : ethers.utils.parseUnits(amount, 6).toString(); // USDC has 6 decimals
+                
                 const response = await fetch(
                     `${ZX_API_BASE}/quote?` + 
                     `sellToken=${sellToken}&` +
                     `buyToken=${buyToken}&` +
-                    `sellAmount=${ethers.utils.parseUnits(amount, from === 'ETH' ? 18 : 6).toString()}&` +
+                    `sellAmount=${amountInWei}&` +
                     `takerAddress=${userAddress}&` +
                     `chainId=8453`
                 );
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API error: ${response.status} - ${errorText}`);
+                }
                 
                 const quote = await response.json();
                 
@@ -711,8 +730,6 @@
                 
                 currentQuote = quote;
                 
-                // Display quote info
-                const decimals = from === 'ETH' ? 18 : 6;
                 const received = ethers.utils.formatUnits(quote.buyAmount, 18); // FUND has 18 decimals
                 toAmount.value = parseFloat(received).toFixed(4);
                 
@@ -722,10 +739,10 @@
                 
                 swapPriceInfo.classList.remove('hidden');
                 executeSwapBtn.classList.remove('hidden');
-                swapStatus.innerHTML = '<span style="color:green;">✅ Quote received! Click Execute to swap.</span>';
+                swapStatus.innerHTML = '<span style="color:green;">✅ Quote ready! Click Execute to swap.</span>';
                 
             } catch (err) {
-                console.error(err);
+                console.error('Quote error:', err);
                 swapStatus.innerHTML = `<span style="color:red;">❌ Error: ${err.message}</span>`;
             }
         });
@@ -736,7 +753,6 @@
             swapStatus.innerHTML = '<span style="color:#8e2de2;">⏳ Executing swap...</span>';
             
             try {
-                // For ETH swaps, we need to send value
                 const txData = {
                     to: currentQuote.to,
                     data: currentQuote.data,
@@ -745,9 +761,7 @@
                     gasLimit: currentQuote.gas
                 };
                 
-                // Send transaction
                 const tx = await signer.sendTransaction(txData);
-                
                 swapStatus.innerHTML = `<span style="color:#8e2de2;">⏳ Transaction sent! Waiting for confirmation...</span>`;
                 
                 await tx.wait();
@@ -755,13 +769,11 @@
                 swapStatus.innerHTML = `<span style="color:green;">✅ Swap complete! <a href="https://basescan.org/tx/${tx.hash}" target="_blank">View on BaseScan</a></span>`;
                 
                 // Reset form
-                setTimeout(() => {
-                    fromAmount.value = '';
-                    toAmount.value = '';
-                    swapPriceInfo.classList.add('hidden');
-                    executeSwapBtn.classList.add('hidden');
-                    currentQuote = null;
-                }, 5000);
+                fromAmount.value = '';
+                toAmount.value = '';
+                swapPriceInfo.classList.add('hidden');
+                executeSwapBtn.classList.add('hidden');
+                currentQuote = null;
                 
                 // Refresh FUND balance
                 const balance = await fundContract.balanceOf(userAddress);
@@ -770,7 +782,7 @@
                 walletInfo.innerHTML = walletInfoText.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(formattedBalance).toFixed(2)}`);
                 
             } catch (err) {
-                console.error(err);
+                console.error('Swap error:', err);
                 swapStatus.innerHTML = `<span style="color:red;">❌ Swap failed: ${err.message}</span>`;
             }
         });
