@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social Funders Network</title>
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -167,12 +168,6 @@
             color: #8e2de2;
             margin: 10px 0;
         }
-        .price-info {
-            background: rgba(142,45,226,0.1);
-            padding: 10px;
-            border-radius: 15px;
-            margin: 15px 0;
-        }
         i { margin-right: 5px; }
         img { max-width: 100%; border-radius: 15px; }
         .footer { text-align: center; color: rgba(255,255,255,0.8); margin-top: 30px; }
@@ -212,9 +207,9 @@
                 <div id="postsList"></div>
             </div>
 
-            <!-- Swap Tab (Odos Aggregator) -->
+            <!-- Swap Tab (DEX Redirect) -->
             <div id="swapTab" class="tab-content hidden">
-                <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens (Odos Aggregator)</h3>
+                <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens</h3>
                 <div class="swap-box">
                     <div class="swap-row">
                         <select id="fromToken">
@@ -228,16 +223,11 @@
                         <select id="toToken" disabled><option value="FUND" selected>FUND</option></select>
                         <input type="text" id="toAmount" placeholder="0.0" readonly>
                     </div>
-                    <button id="getQuoteBtn" class="secondary" style="width:100%;"><i class="fas fa-calculator"></i> Get Quote</button>
-                    <div id="swapPriceInfo" class="price-info hidden">
-                        <div><i class="fas fa-info-circle"></i> <span id="priceRate"></span></div>
-                        <div><i class="fas fa-gas-pump"></i> Est. gas: <span id="gasEstimate"></span></div>
-                    </div>
-                    <button id="executeSwapBtn" class="hidden" style="width:100%;"><i class="fas fa-rocket"></i> Execute Swap</button>
+                    <button id="swapRedirectBtn" class="secondary" style="width:100%;"><i class="fas fa-external-link-alt"></i> Swap on DEX</button>
                     <div id="swapStatus" style="margin-top:15px;"></div>
                 </div>
                 <div class="card">
-                    <p><i class="fas fa-lightbulb"></i> Odos aggregator finds the best price across all DEXs on Base, including Uniswap V4.</p>
+                    <p><i class="fas fa-lightbulb"></i> You'll be redirected to a DEX aggregator where you can complete the swap. Your FUND token is already listed and has liquidity.</p>
                 </div>
             </div>
 
@@ -560,137 +550,41 @@
         function deletePost(id) { if (!isAdmin) return; posts = posts.filter(p => p.id != id); saveData(); renderFeed(); renderAdminPanels(); }
         function deleteCampaign(id) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != id); saveData(); renderCampaigns(); renderAdminPanels(); }
 
-        // ========== ODOS SWAP (Fully Working) ==========
-        const getQuoteBtn = document.getElementById('getQuoteBtn');
-        const executeSwapBtn = document.getElementById('executeSwapBtn');
+        // ========== DEX REDIRECT SWAP ==========
+        const swapRedirectBtn = document.getElementById('swapRedirectBtn');
         const fromAmount = document.getElementById('fromAmount');
         const toAmount = document.getElementById('toAmount');
         const fromToken = document.getElementById('fromToken');
-        const swapPriceInfo = document.getElementById('swapPriceInfo');
-        const priceRate = document.getElementById('priceRate');
-        const gasEstimate = document.getElementById('gasEstimate');
         const swapStatus = document.getElementById('swapStatus');
 
-        const ODOS_API = 'https://api.odos.xyz';
-        let currentQuote = null;
+        // Construct Odos swap URL with pre-filled parameters
+        function buildSwapURL() {
+            const amount = fromAmount.value;
+            const from = fromToken.value;
+            if (!amount || amount <= 0) return null;
 
-        function getTokenAddress(token) {
-            if (token === 'ETH') return '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-            if (token === 'USDC') return USDC_ADDRESS;
-            return FUND_ADDRESS;
-        }
-        function getTokenDecimals(token) {
-            if (token === 'ETH') return 18;
-            if (token === 'USDC') return 6;
-            return 18;
+            // Base Odos URL with your FUND token as output
+            let url = 'https://app.odos.xyz/swap?chainId=8453';
+            url += '&inputCurrency=' + (from === 'ETH' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : USDC_ADDRESS);
+            url += '&outputCurrency=' + FUND_ADDRESS;
+            url += '&inputAmount=' + amount;
+            // Odos also supports exact input
+            return url;
         }
 
-        getQuoteBtn.addEventListener('click', async () => {
+        swapRedirectBtn.addEventListener('click', () => {
             if (!userAddress) {
                 swapStatus.innerHTML = '❌ Connect wallet first';
                 return;
             }
-            const amount = fromAmount.value;
-            const from = fromToken.value;
-            if (!amount || amount <= 0) {
+            const url = buildSwapURL();
+            if (!url) {
                 swapStatus.innerHTML = '❌ Enter a valid amount';
                 return;
             }
-            swapStatus.innerHTML = '🔍 Getting best price from Odos...';
-            try {
-                const inputToken = getTokenAddress(from);
-                const outputToken = FUND_ADDRESS;
-                const amountInWei = ethers.utils.parseUnits(amount, getTokenDecimals(from)).toString();
-
-                const quoteRequest = {
-                    chainId: 8453,
-                    inputTokens: [{
-                        tokenAddress: inputToken,
-                        amount: amountInWei
-                    }],
-                    outputTokens: [{
-                        tokenAddress: outputToken,
-                        proportion: 1
-                    }],
-                    slippageLimitPercent: 0.5,
-                    userAddr: userAddress,
-                    referralCode: 0,
-                    compact: true
-                };
-
-                const quoteRes = await fetch(`${ODOS_API}/sor/quote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(quoteRequest)
-                });
-                if (!quoteRes.ok) throw new Error(await quoteRes.text());
-                const quote = await quoteRes.json();
-                if (quote.error) throw new Error(quote.error);
-
-                currentQuote = quote;
-                const received = ethers.utils.formatUnits(quote.outAmounts[0], 18);
-                toAmount.value = parseFloat(received).toFixed(4);
-                priceRate.innerText = `1 ${from} ≈ ${(received/amount).toFixed(6)} FUND`;
-                gasEstimate.innerText = Math.round(quote.gasEstimate / 1e9) + ' gwei';
-                swapPriceInfo.classList.remove('hidden');
-                executeSwapBtn.classList.remove('hidden');
-                swapStatus.innerHTML = '✅ Quote ready! Click Execute.';
-            } catch (err) {
-                swapStatus.innerHTML = '❌ ' + err.message;
-            }
-        });
-
-        executeSwapBtn.addEventListener('click', async () => {
-            if (!currentQuote || !userAddress) return;
-            swapStatus.innerHTML = '⏳ Assembling transaction...';
-            try {
-                const assembleRes = await fetch(`${ODOS_API}/sor/assemble`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userAddr: userAddress,
-                        pathId: currentQuote.pathId,
-                        simulate: true
-                    })
-                });
-                if (!assembleRes.ok) throw new Error(await assembleRes.text());
-                const assembly = await assembleRes.json();
-
-                if (fromToken.value === 'USDC') {
-                    swapStatus.innerHTML = '⏳ Approving USDC...';
-                    const usdc = new ethers.Contract(USDC_ADDRESS, [
-                        'function approve(address spender, uint256 amount) returns (bool)'
-                    ], signer);
-                    const approveTx = await usdc.approve(
-                        assembly.transaction.to,
-                        ethers.utils.parseUnits(fromAmount.value, 6)
-                    );
-                    await approveTx.wait();
-                }
-
-                swapStatus.innerHTML = '⏳ Executing swap...';
-                const tx = await signer.sendTransaction({
-                    to: assembly.transaction.to,
-                    data: assembly.transaction.data,
-                    value: assembly.transaction.value,
-                    gasPrice: assembly.transaction.gasPrice,
-                    gasLimit: assembly.transaction.gas
-                });
-                swapStatus.innerHTML = '⏳ Waiting for confirmation...';
-                await tx.wait();
-                swapStatus.innerHTML = `✅ Swap complete! <a href="https://basescan.org/tx/${tx.hash}" target="_blank">View</a>`;
-
-                fromAmount.value = ''; toAmount.value = '';
-                swapPriceInfo.classList.add('hidden');
-                executeSwapBtn.classList.add('hidden');
-                currentQuote = null;
-
-                const balance = await fundContract.balanceOf(userAddress);
-                const fmt = ethers.utils.formatUnits(balance, await fundContract.decimals());
-                walletInfo.innerHTML = walletInfo.innerHTML.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(fmt).toFixed(2)}`);
-            } catch (err) {
-                swapStatus.innerHTML = '❌ ' + err.message;
-            }
+            // Open in new tab
+            window.open(url, '_blank');
+            swapStatus.innerHTML = '✅ Redirecting to Odos DEX aggregator...';
         });
     </script>
 </body>
