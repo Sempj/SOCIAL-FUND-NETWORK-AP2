@@ -76,7 +76,7 @@
         button.secondary { background: linear-gradient(45deg, #ff512f, #dd2476); }
         button.danger { background: linear-gradient(45deg, #f85032, #e73827); }
         button.follow-btn { background: linear-gradient(45deg, #f7971e, #ffd200); color: #333; }
-        input, textarea {
+        input, textarea, select {
             font-family: 'Poppins', sans-serif;
             width: 100%;
             padding: 15px;
@@ -87,7 +87,7 @@
             background: rgba(255, 255, 255, 0.9);
             transition: 0.3s;
         }
-        input:focus, textarea:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #8e2de2;
             box-shadow: 0 0 0 3px rgba(142, 45, 226, 0.2);
@@ -191,6 +191,38 @@
             color: white;
             border: none;
         }
+        .swap-box {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .swap-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .swap-row select {
+            width: 40%;
+            margin: 0;
+        }
+        .swap-row input {
+            width: 60%;
+            margin: 0;
+        }
+        .swap-arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #8e2de2;
+            margin: 10px 0;
+        }
+        .price-info {
+            background: rgba(142, 45, 226, 0.1);
+            padding: 10px;
+            border-radius: 15px;
+            margin: 15px 0;
+            font-size: 0.9rem;
+        }
         .footer-note {
             text-align: center;
             color: rgba(255, 255, 255, 0.8);
@@ -215,11 +247,12 @@
         <div id="app" class="hidden">
             <div class="tabs">
                 <div class="tab active" data-tab="feed"><i class="fas fa-newspaper"></i> Feed</div>
+                <div class="tab" data-tab="swap"><i class="fas fa-exchange-alt"></i> Swap</div>
                 <div class="tab" data-tab="campaigns"><i class="fas fa-bullhorn"></i> Campaigns</div>
                 <div class="tab" data-tab="admin" id="adminTab"><i class="fas fa-shield-alt"></i> Admin</div>
             </div>
 
-            <!-- Feed Tab -->
+            <!-- Feed Tab (unchanged) -->
             <div id="feedTab" class="tab-content">
                 <h3><i class="fas fa-pen"></i> Create Post</h3>
                 <textarea id="postContent" placeholder="What's on your mind?"></textarea>
@@ -234,7 +267,56 @@
                 <div id="postsList"></div>
             </div>
 
-            <!-- Campaigns Tab -->
+            <!-- NEW SWAP TAB -->
+            <div id="swapTab" class="tab-content hidden">
+                <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens</h3>
+                <p class="text-muted" style="font-size:0.9rem; margin-bottom:15px;">Swap any token for FUND directly in the app.</p>
+                
+                <div class="swap-box">
+                    <div class="swap-row">
+                        <select id="fromToken">
+                            <option value="ETH">ETH</option>
+                            <option value="USDC">USDC</option>
+                            <option value="DAI">DAI</option>
+                        </select>
+                        <input type="number" id="fromAmount" placeholder="0.0" step="any">
+                    </div>
+                    
+                    <div class="swap-arrow">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                    
+                    <div class="swap-row">
+                        <select id="toToken" disabled>
+                            <option value="FUND" selected>FUND</option>
+                        </select>
+                        <input type="text" id="toAmount" placeholder="0.0" readonly>
+                    </div>
+                    
+                    <button id="getQuoteBtn" class="secondary" style="width:100%; margin-top:15px;">
+                        <i class="fas fa-calculator"></i> Get Quote
+                    </button>
+                    
+                    <div id="swapPriceInfo" class="price-info hidden">
+                        <div><i class="fas fa-info-circle"></i> <span id="priceRate"></span></div>
+                        <div><i class="fas fa-gas-pump"></i> Est. gas: <span id="gasEstimate"></span></div>
+                        <div><i class="fas fa-clock"></i> Est. time: <span id="timeEstimate">~30 seconds</span></div>
+                    </div>
+                    
+                    <button id="executeSwapBtn" class="hidden" style="width:100%; margin-top:15px;">
+                        <i class="fas fa-rocket"></i> Execute Swap
+                    </button>
+                    
+                    <div id="swapStatus" style="margin-top:15px; font-size:0.9rem;"></div>
+                </div>
+                
+                <div class="card" style="background: rgba(255,255,255,0.5);">
+                    <p><i class="fas fa-lightbulb"></i> <strong>Need FUND?</strong> Swap ETH or USDC for FUND instantly. Make sure you have a small amount of ETH for gas fees.</p>
+                    <p style="font-size:0.85rem; margin-top:10px;">Powered by 0x API – finds the best price across all DEXs on Base.</p>
+                </div>
+            </div>
+
+            <!-- Campaigns Tab (unchanged) -->
             <div id="campaignsTab" class="tab-content hidden">
                 <h3><i class="fas fa-hand-holding-usd"></i> Start a Campaign</h3>
                 <input id="campaignTitle" placeholder="Campaign Title">
@@ -247,7 +329,7 @@
                 <div id="campaignsList"></div>
             </div>
 
-            <!-- Admin Tab -->
+            <!-- Admin Tab (unchanged) -->
             <div id="adminTab" class="tab-content hidden">
                 <h3><i class="fas fa-tasks"></i> Manage Posts</h3>
                 <div id="adminPostsList"></div>
@@ -270,10 +352,19 @@
             'function balanceOf(address account) view returns (uint256)'
         ];
         const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899'];
+        
+        // Token addresses on Base
+        const TOKENS = {
+            'ETH': '0x0000000000000000000000000000000000000000', // Native ETH
+            'USDC': '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            'DAI': '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
+            'FUND': FUND_ADDRESS
+        };
 
         // Global state
         let provider, signer, fundContract, userAddress, isAdmin = false;
         let posts = [], campaigns = [], following = [];
+        let currentQuote = null;
 
         // ================== LOCAL STORAGE ==================
         function loadData() {
@@ -544,6 +635,7 @@
             } catch (err) { alert('❌ Tip failed: ' + err.message); }
         }
 
+        // ================== SHARING ==================
         function shareContent(data) {
             const shareData = { title: data.title || 'Social Funders Network', text: data.text || '', url: data.url || window.location.href };
             if (navigator.share) navigator.share(shareData).catch(() => copyToClipboard(shareData.url));
@@ -551,6 +643,7 @@
         }
         function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('🔗 Link copied!')); }
 
+        // ================== ADMIN FUNCTIONS ==================
         function renderAdminPanels() {
             if (!isAdmin) return;
             const adminPosts = document.getElementById('adminPostsList');
@@ -564,6 +657,123 @@
 
         function deletePost(postId) { if (!isAdmin) return; posts = posts.filter(p => p.id != postId); saveData(); renderFeed(); if (isAdmin) renderAdminPanels(); }
         function deleteCampaign(campaignId) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != campaignId); saveData(); renderCampaigns(); if (isAdmin) renderAdminPanels(); }
+
+        // ================== SWAP FUNCTIONS (NEW) ==================
+        const getQuoteBtn = document.getElementById('getQuoteBtn');
+        const executeSwapBtn = document.getElementById('executeSwapBtn');
+        const fromAmount = document.getElementById('fromAmount');
+        const toAmount = document.getElementById('toAmount');
+        const fromToken = document.getElementById('fromToken');
+        const swapPriceInfo = document.getElementById('swapPriceInfo');
+        const priceRate = document.getElementById('priceRate');
+        const gasEstimate = document.getElementById('gasEstimate');
+        const swapStatus = document.getElementById('swapStatus');
+
+        // 0x API endpoint for Base
+        const ZX_API_BASE = 'https://api.0x.org/swap/v1';
+        
+        getQuoteBtn.addEventListener('click', async () => {
+            if (!userAddress) {
+                swapStatus.innerHTML = '<span style="color:red;">❌ Connect wallet first</span>';
+                return;
+            }
+            
+            const amount = fromAmount.value;
+            const from = fromToken.value;
+            
+            if (!amount || amount <= 0) {
+                swapStatus.innerHTML = '<span style="color:red;">❌ Enter a valid amount</span>';
+                return;
+            }
+            
+            swapStatus.innerHTML = '<span style="color:#8e2de2;">🔍 Getting best price...</span>';
+            
+            try {
+                // Convert ETH to WETH address for 0x API (0x uses WETH for ETH trades)
+                const sellToken = from === 'ETH' ? '0x4200000000000000000000000000000000000006' : TOKENS[from];
+                const buyToken = TOKENS['FUND'];
+                
+                // Get quote from 0x API
+                const response = await fetch(
+                    `${ZX_API_BASE}/quote?` + 
+                    `sellToken=${sellToken}&` +
+                    `buyToken=${buyToken}&` +
+                    `sellAmount=${ethers.utils.parseUnits(amount, from === 'ETH' ? 18 : 6).toString()}&` +
+                    `takerAddress=${userAddress}&` +
+                    `chainId=8453`
+                );
+                
+                const quote = await response.json();
+                
+                if (quote.code) {
+                    throw new Error(quote.reason || quote.description || 'Quote failed');
+                }
+                
+                currentQuote = quote;
+                
+                // Display quote info
+                const decimals = from === 'ETH' ? 18 : 6;
+                const received = ethers.utils.formatUnits(quote.buyAmount, 18); // FUND has 18 decimals
+                toAmount.value = parseFloat(received).toFixed(4);
+                
+                const rate = parseFloat(received) / parseFloat(amount);
+                priceRate.innerText = `1 ${from} ≈ ${rate.toFixed(6)} FUND (incl. fees)`;
+                gasEstimate.innerText = `${parseFloat(ethers.utils.formatUnits(quote.estimatedGas, 'gwei')).toFixed(0)} gwei`;
+                
+                swapPriceInfo.classList.remove('hidden');
+                executeSwapBtn.classList.remove('hidden');
+                swapStatus.innerHTML = '<span style="color:green;">✅ Quote received! Click Execute to swap.</span>';
+                
+            } catch (err) {
+                console.error(err);
+                swapStatus.innerHTML = `<span style="color:red;">❌ Error: ${err.message}</span>`;
+            }
+        });
+        
+        executeSwapBtn.addEventListener('click', async () => {
+            if (!currentQuote || !userAddress) return;
+            
+            swapStatus.innerHTML = '<span style="color:#8e2de2;">⏳ Executing swap...</span>';
+            
+            try {
+                // For ETH swaps, we need to send value
+                const txData = {
+                    to: currentQuote.to,
+                    data: currentQuote.data,
+                    value: currentQuote.value,
+                    gasPrice: currentQuote.gasPrice,
+                    gasLimit: currentQuote.gas
+                };
+                
+                // Send transaction
+                const tx = await signer.sendTransaction(txData);
+                
+                swapStatus.innerHTML = `<span style="color:#8e2de2;">⏳ Transaction sent! Waiting for confirmation...</span>`;
+                
+                await tx.wait();
+                
+                swapStatus.innerHTML = `<span style="color:green;">✅ Swap complete! <a href="https://basescan.org/tx/${tx.hash}" target="_blank">View on BaseScan</a></span>`;
+                
+                // Reset form
+                setTimeout(() => {
+                    fromAmount.value = '';
+                    toAmount.value = '';
+                    swapPriceInfo.classList.add('hidden');
+                    executeSwapBtn.classList.add('hidden');
+                    currentQuote = null;
+                }, 5000);
+                
+                // Refresh FUND balance
+                const balance = await fundContract.balanceOf(userAddress);
+                const formattedBalance = ethers.utils.formatUnits(balance, await fundContract.decimals());
+                const walletInfoText = walletInfo.innerHTML;
+                walletInfo.innerHTML = walletInfoText.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(formattedBalance).toFixed(2)}`);
+                
+            } catch (err) {
+                console.error(err);
+                swapStatus.innerHTML = `<span style="color:red;">❌ Swap failed: ${err.message}</span>`;
+            }
+        });
     </script>
 </body>
 </html>
