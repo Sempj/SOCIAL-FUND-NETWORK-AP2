@@ -7,7 +7,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
@@ -20,8 +20,8 @@
             width: 100%;
             background: white;
             border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
         h1 { text-align: center; color: #333; margin-bottom: 20px; }
         button {
@@ -35,6 +35,7 @@
         }
         button.secondary { background: #2196F3; }
         button.danger { background: #f44336; }
+        button.follow-btn { background: #ff9800; }
         input, textarea, select {
             width: 100%;
             padding: 10px;
@@ -71,10 +72,21 @@
             word-break: break-all;
         }
         .post-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
-        .comment { margin-left: 20px; padding: 5px; border-left: 2px solid #4CAF50; }
+        .comment { margin-left: 20px; padding: 5px; border-left: 2px solid #4CAF50; margin-top: 5px; }
         .progress { width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden; }
         .progress-bar { height: 100%; background: #4CAF50; width: 0%; }
-        #errorBox {
+        .feed-toggle {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .feed-toggle button {
+            flex: 1;
+            background: #e0e0e0;
+            color: #333;
+        }
+        .feed-toggle button.active { background: #4CAF50; color: white; }
+        .error-box {
             background: #ffeb3b;
             padding: 10px;
             border-radius: 5px;
@@ -90,8 +102,7 @@
     <div class="container">
         <h1>Social Funders Network</h1>
 
-        <!-- Error display -->
-        <div id="errorBox"></div>
+        <div class="error-box" id="errorBox"></div>
 
         <div id="walletSection">
             <button id="connectBtn">Connect Wallet</button>
@@ -106,15 +117,22 @@
                 <div class="tab" data-tab="admin" id="adminTab">Admin</div>
             </div>
 
+            <!-- Feed Tab -->
             <div id="feedTab" class="tab-content">
                 <h3>Create Post</h3>
                 <textarea id="postContent" placeholder="What's on your mind?"></textarea>
                 <input id="postImage" placeholder="Image URL (optional)">
                 <button id="createPostBtn">Post</button>
+
                 <h3>Feed</h3>
+                <div class="feed-toggle">
+                    <button id="feedAllBtn" class="active">🌐 All</button>
+                    <button id="feedFollowingBtn">👥 Following</button>
+                </div>
                 <div id="postsList"></div>
             </div>
 
+            <!-- Swap Tab -->
             <div id="swapTab" class="tab-content hidden">
                 <h3>Get FUND Tokens</h3>
                 <select id="fromToken">
@@ -127,6 +145,7 @@
                 <p style="margin-top:10px; font-size:0.9rem;">You'll be redirected to Uniswap.</p>
             </div>
 
+            <!-- Campaigns Tab -->
             <div id="campaignsTab" class="tab-content hidden">
                 <h3>Start a Campaign</h3>
                 <input id="campaignTitle" placeholder="Title">
@@ -138,6 +157,7 @@
                 <div id="campaignsList"></div>
             </div>
 
+            <!-- Admin Tab -->
             <div id="adminTab" class="tab-content hidden">
                 <h3>Manage Posts</h3>
                 <div id="adminPostsList"></div>
@@ -151,8 +171,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
     <script>
-        // Error handling wrapper
-        window.onload = function() {
+        (function() {
+            // Error display
+            const errorBox = document.getElementById('errorBox');
+            function logError(msg) { console.error(msg); if (errorBox) errorBox.innerHTML += msg + '<br>'; }
+
             try {
                 // === CONFIG ===
                 const FUND_ADDRESS = '0x06396aa215ef3fa2945c535be9c2ddc4e80a9b07';
@@ -161,10 +184,9 @@
 
                 // === STATE ===
                 let provider, signer, fundContract, userAddress, isAdmin = false;
-                let posts = [], campaigns = [], following = [];
+                let posts = [], campaigns = [], following = [], tips = []; // tips: [{ tipper, recipient, amount, tx }]
 
                 // === DOM ELEMENTS ===
-                const errorBox = document.getElementById('errorBox');
                 const connectBtn = document.getElementById('connectBtn');
                 const walletInfo = document.getElementById('walletInfo');
                 const appDiv = document.getElementById('app');
@@ -182,6 +204,9 @@
                 const campaignDescription = document.getElementById('campaignDescription');
                 const campaignGoal = document.getElementById('campaignGoal');
                 const campaignDeadline = document.getElementById('campaignDeadline');
+                const feedAllBtn = document.getElementById('feedAllBtn');
+                const feedFollowingBtn = document.getElementById('feedFollowingBtn');
+                let currentFeed = 'all';
 
                 // === LOCAL STORAGE ===
                 function loadData() {
@@ -189,26 +214,22 @@
                         posts = JSON.parse(localStorage.getItem('posts') || '[]');
                         campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
                         following = JSON.parse(localStorage.getItem('following') || '[]');
-                    } catch (e) { error('Storage error: ' + e.message); }
+                        tips = JSON.parse(localStorage.getItem('tips') || '[]');
+                    } catch (e) { logError('Storage error: ' + e.message); }
                 }
                 function saveData() {
                     localStorage.setItem('posts', JSON.stringify(posts));
                     localStorage.setItem('campaigns', JSON.stringify(campaigns));
                     localStorage.setItem('following', JSON.stringify(following));
+                    localStorage.setItem('tips', JSON.stringify(tips));
                 }
                 loadData();
-
-                // === ERROR DISPLAY ===
-                function error(msg) {
-                    console.error(msg);
-                    if (errorBox) errorBox.innerHTML += msg + '<br>';
-                }
 
                 // === WALLET CONNECTION ===
                 connectBtn.addEventListener('click', async () => {
                     try {
                         if (!window.ethereum) {
-                            alert('No wallet detected. Open in Trust Wallet.');
+                            alert('No wallet detected. Open in Trust Wallet browser.');
                             return;
                         }
                         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -236,12 +257,12 @@
                         appDiv.classList.remove('hidden');
 
                         isAdmin = ADMIN_WALLETS.includes(userAddress.toLowerCase());
-                        if (!isAdmin && adminTab) adminTab.style.display = 'none';
+                        if (!isAdmin) adminTab.style.display = 'none';
 
                         renderFeed();
                         renderCampaigns();
                         if (isAdmin) renderAdminPanels();
-                    } catch (err) { error('Connection error: ' + err.message); }
+                    } catch (err) { logError('Connection error: ' + err.message); alert('Connection failed: ' + err.message); }
                 });
 
                 // === TAB SWITCHING ===
@@ -251,35 +272,135 @@
                         tabs.forEach(t => t.classList.remove('active'));
                         tab.classList.add('active');
                         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-                        const content = document.getElementById(tabName + 'Tab');
-                        if (content) content.classList.remove('hidden');
+                        document.getElementById(tabName + 'Tab').classList.remove('hidden');
                         if (tabName === 'feed') renderFeed();
                         if (tabName === 'campaigns') renderCampaigns();
                         if (tabName === 'admin' && isAdmin) renderAdminPanels();
                     });
                 });
 
-                // === FEED ===
+                // === FEED TOGGLE ===
+                feedAllBtn.addEventListener('click', () => {
+                    currentFeed = 'all';
+                    feedAllBtn.classList.add('active');
+                    feedFollowingBtn.classList.remove('active');
+                    renderFeed();
+                });
+                feedFollowingBtn.addEventListener('click', () => {
+                    currentFeed = 'following';
+                    feedFollowingBtn.classList.add('active');
+                    feedAllBtn.classList.remove('active');
+                    renderFeed();
+                });
+
+                // === FOLLOW / UNFOLLOW (requires tip) ===
+                function hasTipped(tipper, recipient) {
+                    return tips.some(t => t.tipper === tipper && t.recipient === recipient);
+                }
+
+                function toggleFollow(author) {
+                    if (!userAddress) return alert('Connect first');
+                    if (author === userAddress) return alert('Cannot follow yourself');
+                    // Check if user has tipped this author
+                    if (!hasTipped(userAddress, author)) {
+                        alert('You must tip this user first before following.');
+                        return;
+                    }
+                    const idx = following.indexOf(author);
+                    if (idx === -1) following.push(author);
+                    else following.splice(idx, 1);
+                    saveData();
+                    renderFeed(); // refresh follow buttons
+                }
+
+                function isFollowing(author) {
+                    return following.includes(author);
+                }
+
+                // === TIPPING (record tip) ===
+                async function sendTip(recipient) {
+                    if (!userAddress || !signer) return alert('Connect first');
+                    const amount = prompt('Enter FUND amount to tip:');
+                    if (!amount || amount <= 0) return;
+                    try {
+                        const contract = new ethers.Contract(FUND_ADDRESS, [
+                            'function transfer(address to, uint256 amount) returns (bool)'
+                        ], signer);
+                        const decimals = await fundContract.decimals();
+                        const tx = await contract.transfer(recipient, ethers.utils.parseUnits(amount, decimals));
+                        alert(`Tip sent! Tx: ${tx.hash}`);
+                        await tx.wait();
+                        alert('Transaction confirmed!');
+                        // Record tip
+                        tips.push({ tipper: userAddress, recipient, amount: parseFloat(amount), tx: tx.hash });
+                        saveData();
+                        // Refresh balance
+                        const balance = await fundContract.balanceOf(userAddress);
+                        const formatted = ethers.utils.formatUnits(balance, decimals);
+                        walletInfo.innerHTML = walletInfo.innerHTML.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(formatted).toFixed(2)}`);
+                        renderFeed(); // update follow buttons (now tipped)
+                    } catch (err) { alert('Error: ' + err.message); }
+                }
+
+                // === FEED RENDER ===
                 function renderFeed() {
                     const postsList = document.getElementById('postsList');
                     if (!postsList) return;
-                    if (!posts.length) {
-                        postsList.innerHTML = '<p>No posts yet.</p>';
+
+                    let filteredPosts = posts.slice().reverse();
+                    if (currentFeed === 'following') {
+                        filteredPosts = filteredPosts.filter(p => following.includes(p.author));
+                    }
+
+                    if (filteredPosts.length === 0) {
+                        postsList.innerHTML = '<p>No posts to show.</p>';
                         return;
                     }
-                    postsList.innerHTML = posts.slice().reverse().map(p => `
-                        <div class="card">
-                            <strong>${p.username || p.author.slice(0,6)}</strong>
-                            <p>${p.content}</p>
-                            ${p.imageUrl ? `<img src="${p.imageUrl}" style="max-width:100%">` : ''}
-                            <div class="post-actions">
-                                <button class="like-btn" data-id="${p.id}">❤️ ${p.likes ? p.likes.length : 0}</button>
-                                <button class="tip-btn" data-recipient="${p.author}">💸 Tip</button>
+
+                    postsList.innerHTML = filteredPosts.map(post => {
+                        const hasTippedAuthor = userAddress ? hasTipped(userAddress, post.author) : false;
+                        const followBtnText = isFollowing(post.author) ? '✅ Following' : '➕ Follow';
+                        const followDisabled = (!hasTippedAuthor && !isFollowing(post.author)) ? '' : ''; // enable if already following or just tipped
+                        // Actually we want follow button enabled only if user has tipped and not following, or if following (to unfollow)
+                        let followButton = '';
+                        if (userAddress && post.author !== userAddress) {
+                            if (hasTippedAuthor) {
+                                followButton = `<button class="follow-btn" data-author="${post.author}">${followBtnText}</button>`;
+                            } else {
+                                followButton = `<button disabled style="opacity:0.5;" title="Tip this user first to follow">🔒 Follow (tip required)</button>`;
+                            }
+                        }
+
+                        return `
+                            <div class="card">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <strong>${post.username || post.author.slice(0,6)}</strong>
+                                    ${followButton}
+                                </div>
+                                <p>${post.content}</p>
+                                ${post.imageUrl ? `<img src="${post.imageUrl}" style="max-width:100%">` : ''}
+                                <div class="post-actions">
+                                    <button class="like-btn" data-id="${post.id}">❤️ ${post.likes ? post.likes.length : 0}</button>
+                                    <button class="comment-toggle" data-id="${post.id}">💬 Comments</button>
+                                    <button class="tip-btn" data-recipient="${post.author}">💸 Tip</button>
+                                </div>
+                                <div class="comments-section hidden" id="comments-${post.id}">
+                                    ${(post.comments || []).map(c => `<div class="comment"><strong>${c.username || c.userWallet.slice(0,6)}:</strong> ${c.content}</div>`).join('')}
+                                    <div style="margin-top:10px; display:flex; gap:5px;">
+                                        <input type="text" id="comment-input-${post.id}" placeholder="Add comment...">
+                                        <button class="add-comment" data-id="${post.id}">Post</button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
+
+                    // Attach event listeners
                     document.querySelectorAll('.like-btn').forEach(btn => btn.addEventListener('click', (e) => likePost(e.target.dataset.id)));
+                    document.querySelectorAll('.comment-toggle').forEach(btn => btn.addEventListener('click', (e) => toggleComments(e.target.dataset.id)));
+                    document.querySelectorAll('.add-comment').forEach(btn => btn.addEventListener('click', (e) => addComment(e.target.dataset.id)));
                     document.querySelectorAll('.tip-btn').forEach(btn => btn.addEventListener('click', (e) => sendTip(e.target.dataset.recipient)));
+                    document.querySelectorAll('.follow-btn').forEach(btn => btn.addEventListener('click', (e) => toggleFollow(e.target.dataset.author)));
                 }
 
                 function likePost(postId) {
@@ -292,6 +413,24 @@
                     saveData(); renderFeed();
                 }
 
+                function toggleComments(postId) {
+                    const section = document.getElementById('comments-' + postId);
+                    if (section) section.classList.toggle('hidden');
+                }
+
+                function addComment(postId) {
+                    if (!userAddress) return alert('Connect first');
+                    const input = document.getElementById('comment-input-' + postId);
+                    const text = input.value.trim();
+                    if (!text) return;
+                    const post = posts.find(p => p.id == postId);
+                    if (!post) return;
+                    if (!post.comments) post.comments = [];
+                    post.comments.push({ userWallet: userAddress, username: userAddress.slice(0,6)+'...', content: text });
+                    saveData(); renderFeed();
+                }
+
+                // === CREATE POST ===
                 if (createPostBtn) {
                     createPostBtn.addEventListener('click', () => {
                         if (!userAddress) return alert('Connect first');
@@ -314,32 +453,12 @@
                     });
                 }
 
-                // === TIPPING ===
-                async function sendTip(recipient) {
-                    if (!userAddress || !signer) return alert('Connect first');
-                    const amount = prompt('Enter FUND amount to tip:');
-                    if (!amount || amount <= 0) return;
-                    try {
-                        const contract = new ethers.Contract(FUND_ADDRESS, [
-                            'function transfer(address to, uint256 amount) returns (bool)'
-                        ], signer);
-                        const decimals = await fundContract.decimals();
-                        const tx = await contract.transfer(recipient, ethers.utils.parseUnits(amount, decimals));
-                        alert(`Tip sent! Tx: ${tx.hash}`);
-                        await tx.wait();
-                        alert('Confirmed');
-                        const balance = await fundContract.balanceOf(userAddress);
-                        const formatted = ethers.utils.formatUnits(balance, decimals);
-                        walletInfo.innerHTML = walletInfo.innerHTML.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(formatted).toFixed(2)}`);
-                    } catch (err) { alert('Error: ' + err.message); }
-                }
-
                 // === CAMPAIGNS ===
                 function renderCampaigns() {
                     const list = document.getElementById('campaignsList');
                     if (!list) return;
                     if (!campaigns.length) {
-                        list.innerHTML = '<p>No campaigns.</p>';
+                        list.innerHTML = '<p>No active campaigns.</p>';
                         return;
                     }
                     list.innerHTML = campaigns.filter(c => c.status === 'active').map(c => `
@@ -451,13 +570,13 @@
                         else url += '&inputCurrency=' + USDC_ADDRESS;
                         url += '&exactAmount=' + amount;
                         window.open(url, '_blank');
-                        swapStatus.innerHTML = '✅ Redirecting...';
+                        swapStatus.innerHTML = '✅ Redirecting to Uniswap...';
                     });
                 }
             } catch (e) {
                 document.getElementById('errorBox').innerHTML = 'Critical error: ' + e.message;
             }
-        };
+        })();
     </script>
 </body>
 </html>
