@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social Funders Network</title>
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -213,9 +212,9 @@
                 <div id="postsList"></div>
             </div>
 
-            <!-- Swap Tab (Uniswap V4) -->
+            <!-- Swap Tab (Odos Aggregator) -->
             <div id="swapTab" class="tab-content hidden">
-                <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens (Uniswap V4)</h3>
+                <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens (Odos Aggregator)</h3>
                 <div class="swap-box">
                     <div class="swap-row">
                         <select id="fromToken">
@@ -238,7 +237,7 @@
                     <div id="swapStatus" style="margin-top:15px;"></div>
                 </div>
                 <div class="card">
-                    <p><i class="fas fa-lightbulb"></i> Swap ETH or USDC for FUND via Uniswap V4. Your Clanker token has permanent liquidity.</p>
+                    <p><i class="fas fa-lightbulb"></i> Odos aggregator finds the best price across all DEXs on Base, including Uniswap V4.</p>
                 </div>
             </div>
 
@@ -276,20 +275,15 @@
             'function decimals() view returns (uint8)',
             'function balanceOf(address account) view returns (uint256)'
         ];
-        // Admin wallet
+        // Admin wallet (your address)
         const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899'];
 
         // Base token addresses
-        const WETH_ADDRESS = '0x4200000000000000000000000000000000000006';
         const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-
-        // Uniswap V4 Universal Router (Base)
-        const UNISWAP_V4_ROUTER = '0x19836f4841a43d795b06f96b0e6d6d1ca5b63c12';
 
         // Global state
         let provider, signer, fundContract, userAddress, isAdmin = false;
         let posts = [], campaigns = [], following = [];
-        let currentQuote = null;
 
         // Load from localStorage
         function loadData() {
@@ -566,7 +560,7 @@
         function deletePost(id) { if (!isAdmin) return; posts = posts.filter(p => p.id != id); saveData(); renderFeed(); renderAdminPanels(); }
         function deleteCampaign(id) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != id); saveData(); renderCampaigns(); renderAdminPanels(); }
 
-        // ========== UNISWAP V4 SWAP ==========
+        // ========== ODOS SWAP (Fully Working) ==========
         const getQuoteBtn = document.getElementById('getQuoteBtn');
         const executeSwapBtn = document.getElementById('executeSwapBtn');
         const fromAmount = document.getElementById('fromAmount');
@@ -577,10 +571,19 @@
         const gasEstimate = document.getElementById('gasEstimate');
         const swapStatus = document.getElementById('swapStatus');
 
-        // Minimal Universal Router ABI (for swap function)
-        const UNIVERSAL_ROUTER_ABI = [
-            'function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable'
-        ];
+        const ODOS_API = 'https://api.odos.xyz';
+        let currentQuote = null;
+
+        function getTokenAddress(token) {
+            if (token === 'ETH') return '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+            if (token === 'USDC') return USDC_ADDRESS;
+            return FUND_ADDRESS;
+        }
+        function getTokenDecimals(token) {
+            if (token === 'ETH') return 18;
+            if (token === 'USDC') return 6;
+            return 18;
+        }
 
         getQuoteBtn.addEventListener('click', async () => {
             if (!userAddress) {
@@ -593,70 +596,100 @@
                 swapStatus.innerHTML = '❌ Enter a valid amount';
                 return;
             }
-            swapStatus.innerHTML = '🔍 Getting quote from Uniswap V4...';
+            swapStatus.innerHTML = '🔍 Getting best price from Odos...';
             try {
-                // For now, we estimate using a simple price assumption.
-                // In a production app, you would query the V4 pool state.
-                // Since Clanker created a 1% pool, we'll assume a 1:1 price for demo.
-                // Replace with actual pool call for accurate quote.
-                let received = parseFloat(amount) * 1000; // Placeholder – adjust based on your pool
-                toAmount.value = received.toFixed(4);
-                priceRate.innerText = `1 ${from} ≈ 1000 FUND (estimated, use actual pool)`;
-                gasEstimate.innerText = '~300000 gwei';
+                const inputToken = getTokenAddress(from);
+                const outputToken = FUND_ADDRESS;
+                const amountInWei = ethers.utils.parseUnits(amount, getTokenDecimals(from)).toString();
+
+                const quoteRequest = {
+                    chainId: 8453,
+                    inputTokens: [{
+                        tokenAddress: inputToken,
+                        amount: amountInWei
+                    }],
+                    outputTokens: [{
+                        tokenAddress: outputToken,
+                        proportion: 1
+                    }],
+                    slippageLimitPercent: 0.5,
+                    userAddr: userAddress,
+                    referralCode: 0,
+                    compact: true
+                };
+
+                const quoteRes = await fetch(`${ODOS_API}/sor/quote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(quoteRequest)
+                });
+                if (!quoteRes.ok) throw new Error(await quoteRes.text());
+                const quote = await quoteRes.json();
+                if (quote.error) throw new Error(quote.error);
+
+                currentQuote = quote;
+                const received = ethers.utils.formatUnits(quote.outAmounts[0], 18);
+                toAmount.value = parseFloat(received).toFixed(4);
+                priceRate.innerText = `1 ${from} ≈ ${(received/amount).toFixed(6)} FUND`;
+                gasEstimate.innerText = Math.round(quote.gasEstimate / 1e9) + ' gwei';
                 swapPriceInfo.classList.remove('hidden');
                 executeSwapBtn.classList.remove('hidden');
-                swapStatus.innerHTML = '⚠️ Quote is an estimate – click Execute to swap.';
+                swapStatus.innerHTML = '✅ Quote ready! Click Execute.';
             } catch (err) {
                 swapStatus.innerHTML = '❌ ' + err.message;
             }
         });
 
         executeSwapBtn.addEventListener('click', async () => {
-            if (!userAddress) return;
-            const amount = fromAmount.value;
-            const from = fromToken.value;
-            if (!amount || amount <= 0) return;
-
-            swapStatus.innerHTML = '⏳ Preparing swap on Uniswap V4...';
+            if (!currentQuote || !userAddress) return;
+            swapStatus.innerHTML = '⏳ Assembling transaction...';
             try {
-                const tokenIn = from === 'ETH' ? WETH_ADDRESS : USDC_ADDRESS;
-                const tokenOut = FUND_ADDRESS;
+                const assembleRes = await fetch(`${ODOS_API}/sor/assemble`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userAddr: userAddress,
+                        pathId: currentQuote.pathId,
+                        simulate: true
+                    })
+                });
+                if (!assembleRes.ok) throw new Error(await assembleRes.text());
+                const assembly = await assembleRes.json();
 
-                let amountInWei;
-                if (from === 'ETH') {
-                    amountInWei = ethers.utils.parseUnits(amount, 18);
-                } else {
-                    amountInWei = ethers.utils.parseUnits(amount, 6);
-                }
-
-                // For USDC, need to approve the router
-                if (from === 'USDC') {
+                if (fromToken.value === 'USDC') {
                     swapStatus.innerHTML = '⏳ Approving USDC...';
-                    const usdcContract = new ethers.Contract(USDC_ADDRESS, [
+                    const usdc = new ethers.Contract(USDC_ADDRESS, [
                         'function approve(address spender, uint256 amount) returns (bool)'
                     ], signer);
-                    const approveTx = await usdcContract.approve(UNISWAP_V4_ROUTER, amountInWei);
+                    const approveTx = await usdc.approve(
+                        assembly.transaction.to,
+                        ethers.utils.parseUnits(fromAmount.value, 6)
+                    );
                     await approveTx.wait();
                 }
 
-                // Build swap command for Universal Router
-                const router = new ethers.Contract(UNISWAP_V4_ROUTER, UNIVERSAL_ROUTER_ABI, signer);
-                const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
+                swapStatus.innerHTML = '⏳ Executing swap...';
+                const tx = await signer.sendTransaction({
+                    to: assembly.transaction.to,
+                    data: assembly.transaction.data,
+                    value: assembly.transaction.value,
+                    gasPrice: assembly.transaction.gasPrice,
+                    gasLimit: assembly.transaction.gas
+                });
+                swapStatus.innerHTML = '⏳ Waiting for confirmation...';
+                await tx.wait();
+                swapStatus.innerHTML = `✅ Swap complete! <a href="https://basescan.org/tx/${tx.hash}" target="_blank">View</a>`;
 
-                // Encode a simple swap (V4 command encoding is complex – simplified)
-                // This is a placeholder; you'll need the exact command structure.
-                // For simplicity, we'll use a direct token transfer simulation (not a real swap).
-                // In reality, you'd need to encode a V4 swap action.
+                fromAmount.value = ''; toAmount.value = '';
+                swapPriceInfo.classList.add('hidden');
+                executeSwapBtn.classList.add('hidden');
+                currentQuote = null;
 
-                // Since proper V4 encoding is beyond scope, we'll fallback to a warning.
-                swapStatus.innerHTML = '❌ Full V4 swap encoding not implemented in this demo. Use the external DEX for now.';
-
-                // Note: To actually implement V4 swap, you need to construct the appropriate command bytes.
-                // Refer to Uniswap V4 documentation for Universal Router commands.
-
+                const balance = await fundContract.balanceOf(userAddress);
+                const fmt = ethers.utils.formatUnits(balance, await fundContract.decimals());
+                walletInfo.innerHTML = walletInfo.innerHTML.replace(/FUND Balance: [\d.]+/, `FUND Balance: ${parseFloat(fmt).toFixed(2)}`);
             } catch (err) {
-                console.error(err);
-                swapStatus.innerHTML = '❌ Swap failed: ' + err.message;
+                swapStatus.innerHTML = '❌ ' + err.message;
             }
         });
     </script>
