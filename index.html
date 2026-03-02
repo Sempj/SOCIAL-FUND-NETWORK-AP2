@@ -58,6 +58,14 @@
             background: #e3f2fd;
             border-left: 5px solid #2196F3;
         }
+        .store-card {
+            background: #fff3e0;
+            border-left: 5px solid #ff9800;
+        }
+        .event-card {
+            background: #e1f5fe;
+            border-left: 5px solid #03a9f4;
+        }
         .hidden { display: none; }
         .tabs {
             display: flex;
@@ -113,6 +121,28 @@
         }
         .badge-donation { background: #4CAF50; color: white; }
         .badge-swap { background: #2196F3; color: white; }
+        .badge-store { background: #ff9800; color: white; }
+        .badge-event { background: #03a9f4; color: white; }
+        .store-item, .event-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .store-item:last-child, .event-item:last-child { border-bottom: none; }
+        .price-tag {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .admin-badge {
+            background: #f44336;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -129,6 +159,7 @@
         <div id="app" class="hidden">
             <div class="tabs">
                 <div class="tab active" data-tab="feed">Feed</div>
+                <div class="tab" data-tab="market">Market & Events</div>
                 <div class="tab" data-tab="swap">Swap</div>
                 <div class="tab" data-tab="campaigns">Campaigns</div>
                 <div class="tab" data-tab="admin" id="adminTab">Admin</div>
@@ -147,6 +178,68 @@
                     <button id="feedFollowingBtn">👥 Following</button>
                 </div>
                 <div id="postsList"></div>
+            </div>
+
+            <!-- Market & Events Tab -->
+            <div id="marketTab" class="tab-content hidden">
+                <h3>🏪 Market & Events</h3>
+                
+                <!-- Create Store Section -->
+                <div class="card">
+                    <h4>Create Your Store</h4>
+                    <p>Pay <span class="price-tag">100 FUND</span> to create a store (one-time fee)</p>
+                    <input id="storeName" placeholder="Store Name">
+                    <textarea id="storeDescription" placeholder="Store Description"></textarea>
+                    <button id="createStoreBtn" class="secondary">Create Store (100 FUND)</button>
+                </div>
+
+                <!-- Create Event Section -->
+                <div class="card">
+                    <h4>Create an Event</h4>
+                    <p>Pay <span class="price-tag">50 FUND</span> to create an event</p>
+                    <input id="eventTitle" placeholder="Event Title">
+                    <textarea id="eventDescription" placeholder="Event Description"></textarea>
+                    <input id="eventDate" type="datetime-local" placeholder="Event Date">
+                    <input id="eventLocation" placeholder="Location (or virtual)">
+                    <input id="ticketPrice" type="number" placeholder="Ticket Price (FUND)">
+                    <input id="ticketQuantity" type="number" placeholder="Number of Tickets">
+                    <button id="createEventBtn" class="secondary">Create Event (50 FUND)</button>
+                </div>
+
+                <!-- Add Item to Store Section -->
+                <div class="card" id="addItemSection" style="display:none;">
+                    <h4>Add Item to Your Store</h4>
+                    <select id="myStores"></select>
+                    <input id="itemName" placeholder="Item Name">
+                    <textarea id="itemDescription" placeholder="Item Description"></textarea>
+                    <input id="itemPrice" type="number" placeholder="Price (FUND)">
+                    <input id="itemQuantity" type="number" placeholder="Quantity">
+                    <button id="addItemBtn">Add Item</button>
+                </div>
+
+                <!-- My Stores Section -->
+                <div class="card" id="myStoresSection" style="display:none;">
+                    <h4>My Stores</h4>
+                    <div id="myStoresList"></div>
+                </div>
+
+                <!-- My Events Section -->
+                <div class="card" id="myEventsSection" style="display:none;">
+                    <h4>My Events</h4>
+                    <div id="myEventsList"></div>
+                </div>
+
+                <!-- Browse Stores -->
+                <div class="card">
+                    <h4>Browse Stores</h4>
+                    <div id="browseStores"></div>
+                </div>
+
+                <!-- Browse Events -->
+                <div class="card">
+                    <h4>Browse Events</h4>
+                    <div id="browseEvents"></div>
+                </div>
             </div>
 
             <!-- Swap Tab -->
@@ -198,6 +291,8 @@
                 const FUND_ADDRESS = '0x06396aa215ef3fa2945c535be9c2ddc4e80a9b07';
                 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
                 const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899']; // real admin
+                const STORE_CREATION_FEE = 100; // FUND
+                const EVENT_CREATION_FEE = 50; // FUND
 
                 // === FAKE USERS ===
                 const FAKE_USERS = [
@@ -211,6 +306,7 @@
                 // === STATE ===
                 let provider, signer, fundContract, userAddress, isAdmin = false;
                 let posts = [], campaigns = [], following = [], tips = [];
+                let stores = [], events = [], userStores = [], userEvents = [];
 
                 // === DOM ELEMENTS ===
                 const connectBtn = document.getElementById('connectBtn');
@@ -232,10 +328,24 @@
                 const campaignDeadline = document.getElementById('campaignDeadline');
                 const feedAllBtn = document.getElementById('feedAllBtn');
                 const feedFollowingBtn = document.getElementById('feedFollowingBtn');
-                let currentFeed = 'all';
+                const createStoreBtn = document.getElementById('createStoreBtn');
+                const storeName = document.getElementById('storeName');
+                const storeDescription = document.getElementById('storeDescription');
+                const createEventBtn = document.getElementById('createEventBtn');
+                const eventTitle = document.getElementById('eventTitle');
+                const eventDescription = document.getElementById('eventDescription');
+                const eventDate = document.getElementById('eventDate');
+                const eventLocation = document.getElementById('eventLocation');
+                const ticketPrice = document.getElementById('ticketPrice');
+                const ticketQuantity = document.getElementById('ticketQuantity');
+                const addItemBtn = document.getElementById('addItemBtn');
+                const myStores = document.getElementById('myStores');
+                const itemName = document.getElementById('itemName');
+                const itemDescription = document.getElementById('itemDescription');
+                const itemPrice = document.getElementById('itemPrice');
+                const itemQuantity = document.getElementById('itemQuantity');
 
-                // === FORCE RESET FOR DEMO - COMMENT OUT IN PRODUCTION ===
-                // localStorage.clear(); // Uncomment this if you want to completely reset
+                let currentFeed = 'all';
 
                 // === LOCAL STORAGE ===
                 function loadData() {
@@ -244,6 +354,10 @@
                         campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
                         following = JSON.parse(localStorage.getItem('following') || '[]');
                         tips = JSON.parse(localStorage.getItem('tips') || '[]');
+                        stores = JSON.parse(localStorage.getItem('stores') || '[]');
+                        events = JSON.parse(localStorage.getItem('events') || '[]');
+                        userStores = JSON.parse(localStorage.getItem('userStores') || '[]');
+                        userEvents = JSON.parse(localStorage.getItem('userEvents') || '[]');
                     } catch (e) { logError('Storage error: ' + e.message); }
                 }
                 function saveData() {
@@ -251,134 +365,125 @@
                     localStorage.setItem('campaigns', JSON.stringify(campaigns));
                     localStorage.setItem('following', JSON.stringify(following));
                     localStorage.setItem('tips', JSON.stringify(tips));
+                    localStorage.setItem('stores', JSON.stringify(stores));
+                    localStorage.setItem('events', JSON.stringify(events));
+                    localStorage.setItem('userStores', JSON.stringify(userStores));
+                    localStorage.setItem('userEvents', JSON.stringify(userEvents));
                 }
                 loadData();
 
                 // === CREATE FRESH DATA ON EVERY LOAD (FOR DEMO) ===
-                // This ensures you always see the example posts
-                const now = Date.now();
-                
-                // Regular user posts
-                const userPosts = [
-                    { id: now - 20000, author: FAKE_USERS[0].address, username: FAKE_USERS[0].username, content: 'Just joined Social Funders! Loving the vibe 🚀', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 19000, author: FAKE_USERS[0].address, username: FAKE_USERS[0].username, content: 'Anyone tips with FUND yet?', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 18000, author: FAKE_USERS[1].address, username: FAKE_USERS[1].username, content: 'Check out my new project – building on Base!', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 17000, author: FAKE_USERS[1].address, username: FAKE_USERS[1].username, content: 'Need some FUND for a campaign, details coming soon.', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 16000, author: FAKE_USERS[2].address, username: FAKE_USERS[2].username, content: 'FUND to the moon! 🚀🚀', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 15000, author: FAKE_USERS[2].address, username: FAKE_USERS[2].username, content: 'Who else is bullish on Base?', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 14000, author: FAKE_USERS[3].address, username: FAKE_USERS[3].username, content: 'Just tipped my first user! This is awesome.', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 13000, author: FAKE_USERS[3].address, username: FAKE_USERS[3].username, content: 'The follow‑to‑tip mechanism is genius.', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 12000, author: FAKE_USERS[4].address, username: FAKE_USERS[4].username, content: 'Meme token season is back?', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 11000, author: FAKE_USERS[4].address, username: FAKE_USERS[4].username, content: 'Who’s creating the next big campaign?', imageUrl: '', likes: [], comments: [] },
-                    { id: now - 10000, author: ADMIN_WALLETS[0], username: 'Admin', content: 'Welcome everyone! Tip me to unlock following.', imageUrl: '', likes: [], comments: [] }
-                ];
+                if (posts.length === 0) {
+                    const now = Date.now();
+                    
+                    // Regular user posts
+                    const userPosts = [
+                        { id: now - 20000, author: FAKE_USERS[0].address, username: FAKE_USERS[0].username, content: 'Just joined Social Funders! Loving the vibe 🚀', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 19000, author: FAKE_USERS[0].address, username: FAKE_USERS[0].username, content: 'Anyone tips with FUND yet?', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 18000, author: FAKE_USERS[1].address, username: FAKE_USERS[1].username, content: 'Check out my new project – building on Base!', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 17000, author: FAKE_USERS[1].address, username: FAKE_USERS[1].username, content: 'Need some FUND for a campaign, details coming soon.', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 16000, author: FAKE_USERS[2].address, username: FAKE_USERS[2].username, content: 'FUND to the moon! 🚀🚀', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 15000, author: FAKE_USERS[2].address, username: FAKE_USERS[2].username, content: 'Who else is bullish on Base?', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 14000, author: FAKE_USERS[3].address, username: FAKE_USERS[3].username, content: 'Just tipped my first user! This is awesome.', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 13000, author: FAKE_USERS[3].address, username: FAKE_USERS[3].username, content: 'The follow‑to‑tip mechanism is genius.', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 12000, author: FAKE_USERS[4].address, username: FAKE_USERS[4].username, content: 'Meme token season is back?', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 11000, author: FAKE_USERS[4].address, username: FAKE_USERS[4].username, content: 'Who’s creating the next big campaign?', imageUrl: '', likes: [], comments: [] },
+                        { id: now - 10000, author: ADMIN_WALLETS[0], username: 'Admin', content: 'Welcome everyone! Tip me to unlock following.', imageUrl: '', likes: [], comments: [] }
+                    ];
 
-                // Example donation posts
-                const donationPosts = [
-                    { 
-                        id: now - 9000, 
-                        author: FAKE_USERS[0].address,
-                        username: FAKE_USERS[0].username,
-                        type: 'donation', 
-                        from: FAKE_USERS[0].username, 
-                        fromAddr: FAKE_USERS[0].address,
-                        to: FAKE_USERS[1].username, 
-                        toAddr: FAKE_USERS[1].address,
-                        amount: 500, 
-                        content: '💰 CryptoAlice donated 500 FUND to BlockchainBob\'s campaign!', 
-                        imageUrl: '', 
-                        likes: [ADMIN_WALLETS[0]], 
-                        comments: [
-                            { userWallet: ADMIN_WALLETS[0], username: 'Admin', content: 'Amazing generosity!' }
-                        ] 
-                    },
-                    { 
-                        id: now - 8000, 
-                        author: FAKE_USERS[2].address,
-                        username: FAKE_USERS[2].username,
-                        type: 'donation', 
-                        from: FAKE_USERS[2].username, 
-                        fromAddr: FAKE_USERS[2].address,
-                        to: FAKE_USERS[3].username, 
-                        toAddr: FAKE_USERS[3].address,
-                        amount: 250, 
-                        content: '💰 FundCharlie donated 250 FUND to TokenDiana\'s community fund!', 
-                        imageUrl: '', 
-                        likes: [], 
-                        comments: [] 
-                    },
-                    { 
-                        id: now - 7000, 
-                        author: FAKE_USERS[4].address,
-                        username: FAKE_USERS[4].username,
-                        type: 'donation', 
-                        from: FAKE_USERS[4].username, 
-                        fromAddr: FAKE_USERS[4].address,
-                        to: FAKE_USERS[0].username, 
-                        toAddr: FAKE_USERS[0].address,
-                        amount: 1000, 
-                        content: '💰 MemeEve donated 1000 FUND to CryptoAlice\'s NFT project!', 
-                        imageUrl: '', 
-                        likes: [FAKE_USERS[1].address, FAKE_USERS[2].address], 
-                        comments: [] 
-                    }
-                ];
+                    // Example donation posts
+                    const donationPosts = [
+                        { 
+                            id: now - 9000, 
+                            author: FAKE_USERS[0].address,
+                            username: FAKE_USERS[0].username,
+                            type: 'donation', 
+                            content: '💰 CryptoAlice donated 500 FUND to BlockchainBob\'s campaign!', 
+                            imageUrl: '', 
+                            likes: [ADMIN_WALLETS[0]], 
+                            comments: [
+                                { userWallet: ADMIN_WALLETS[0], username: 'Admin', content: 'Amazing generosity!' }
+                            ] 
+                        },
+                        { 
+                            id: now - 8000, 
+                            author: FAKE_USERS[2].address,
+                            username: FAKE_USERS[2].username,
+                            type: 'donation', 
+                            content: '💰 FundCharlie donated 250 FUND to TokenDiana\'s community fund!', 
+                            imageUrl: '', 
+                            likes: [], 
+                            comments: [] 
+                        },
+                        { 
+                            id: now - 7000, 
+                            author: FAKE_USERS[4].address,
+                            username: FAKE_USERS[4].username,
+                            type: 'donation', 
+                            content: '💰 MemeEve donated 1000 FUND to CryptoAlice\'s NFT project!', 
+                            imageUrl: '', 
+                            likes: [FAKE_USERS[1].address, FAKE_USERS[2].address], 
+                            comments: [] 
+                        }
+                    ];
 
-                // Example swap posts
-                const swapPosts = [
-                    { 
-                        id: now - 6000, 
-                        author: FAKE_USERS[1].address,
-                        username: FAKE_USERS[1].username,
-                        type: 'swap', 
-                        from: FAKE_USERS[1].username, 
-                        fromAddr: FAKE_USERS[1].address,
-                        fromToken: 'ETH', 
-                        toToken: 'FUND', 
-                        fromAmount: 0.5, 
-                        toAmount: 5000, 
-                        content: '🔄 BlockchainBob swapped 0.5 ETH for 5000 FUND on Uniswap!', 
-                        imageUrl: '', 
-                        likes: [FAKE_USERS[0].address], 
-                        comments: [] 
-                    },
-                    { 
-                        id: now - 5000, 
-                        author: FAKE_USERS[2].address,
-                        username: FAKE_USERS[2].username,
-                        type: 'swap', 
-                        from: FAKE_USERS[2].username, 
-                        fromAddr: FAKE_USERS[2].address,
-                        fromToken: 'USDC', 
-                        toToken: 'FUND', 
-                        fromAmount: 1000, 
-                        toAmount: 25000, 
-                        content: '🔄 FundCharlie swapped 1000 USDC for 25000 FUND!', 
-                        imageUrl: '', 
-                        likes: [], 
-                        comments: [] 
-                    },
-                    { 
-                        id: now - 4000, 
-                        author: FAKE_USERS[3].address,
-                        username: FAKE_USERS[3].username,
-                        type: 'swap', 
-                        from: FAKE_USERS[3].username, 
-                        fromAddr: FAKE_USERS[3].address,
-                        fromToken: 'ETH', 
-                        toToken: 'FUND', 
-                        fromAmount: 0.2, 
-                        toAmount: 2000, 
-                        content: '🔄 TokenDiana swapped 0.2 ETH for 2000 FUND.', 
-                        imageUrl: '', 
-                        likes: [FAKE_USERS[4].address], 
-                        comments: [] 
-                    }
-                ];
+                    // Example swap posts
+                    const swapPosts = [
+                        { 
+                            id: now - 6000, 
+                            author: FAKE_USERS[1].address,
+                            username: FAKE_USERS[1].username,
+                            type: 'swap', 
+                            content: '🔄 BlockchainBob swapped 0.5 ETH for 5000 FUND on Uniswap!', 
+                            imageUrl: '', 
+                            likes: [FAKE_USERS[0].address], 
+                            comments: [] 
+                        },
+                        { 
+                            id: now - 5000, 
+                            author: FAKE_USERS[2].address,
+                            username: FAKE_USERS[2].username,
+                            type: 'swap', 
+                            content: '🔄 FundCharlie swapped 1000 USDC for 25000 FUND!', 
+                            imageUrl: '', 
+                            likes: [], 
+                            comments: [] 
+                        },
+                        { 
+                            id: now - 4000, 
+                            author: FAKE_USERS[3].address,
+                            username: FAKE_USERS[3].username,
+                            type: 'swap', 
+                            content: '🔄 TokenDiana swapped 0.2 ETH for 2000 FUND.', 
+                            imageUrl: '', 
+                            likes: [FAKE_USERS[4].address], 
+                            comments: [] 
+                        }
+                    ];
 
-                // Combine all posts - this runs on every load, overwriting old data
-                posts = [...userPosts, ...donationPosts, ...swapPosts].sort((a, b) => b.id - a.id);
-                saveData();
+                    // Example stores
+                    const exampleStores = [
+                        { id: now - 3000, owner: FAKE_USERS[0].address, ownerName: FAKE_USERS[0].username, name: 'CryptoAlice\'s NFT Shop', description: 'Rare digital collectibles', items: [
+                            { id: now - 2999, name: 'Pixel Punk #42', description: 'Limited edition', price: 500, quantity: 10 },
+                            { id: now - 2998, name: 'Genesis NFT', description: 'First mint', price: 1200, quantity: 3 }
+                        ]},
+                        { id: now - 2000, owner: FAKE_USERS[1].address, ownerName: FAKE_USERS[1].username, name: 'BlockchainBob\'s Hardware', description: 'Mining rigs and accessories', items: [
+                            { id: now - 1999, name: 'Antminer S19', description: '95 TH/s', price: 2500, quantity: 2 },
+                            { id: now - 1998, name: 'Cooling Fan', description: 'High performance', price: 150, quantity: 20 }
+                        ]}
+                    ];
+
+                    // Example events
+                    const exampleEvents = [
+                        { id: now - 1500, owner: FAKE_USERS[2].address, ownerName: FAKE_USERS[2].username, title: 'Base Network Summit', description: 'Annual blockchain conference', date: '2026-06-15T18:00', location: 'Virtual', ticketPrice: 100, tickets: 100, sold: 23 },
+                        { id: now - 1000, owner: FAKE_USERS[3].address, ownerName: FAKE_USERS[3].username, title: 'NFT Art Exhibition', description: 'Showcase of digital art', date: '2026-07-20T14:00', location: 'New York', ticketPrice: 50, tickets: 50, sold: 12 }
+                    ];
+
+                    posts = [...userPosts, ...donationPosts, ...swapPosts].sort((a, b) => b.id - a.id);
+                    stores = exampleStores;
+                    events = exampleEvents;
+                    saveData();
+                }
 
                 // === WALLET CONNECTION ===
                 connectBtn.addEventListener('click', async () => {
@@ -416,6 +521,7 @@
 
                         renderFeed();
                         renderCampaigns();
+                        renderMarket();
                         if (isAdmin) renderAdminPanels();
                     } catch (err) { logError('Connection error: ' + err.message); alert('Connection failed: ' + err.message); }
                 });
@@ -429,6 +535,7 @@
                         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                         document.getElementById(tabName + 'Tab').classList.remove('hidden');
                         if (tabName === 'feed') renderFeed();
+                        if (tabName === 'market') renderMarket();
                         if (tabName === 'campaigns') renderCampaigns();
                         if (tabName === 'admin' && isAdmin) renderAdminPanels();
                     });
@@ -471,7 +578,7 @@
                     return following.includes(author);
                 }
 
-                // === TIPPING (only works for real addresses; fake users cannot receive tips) ===
+                // === TIPPING ===
                 async function sendTip(recipient) {
                     if (!userAddress || !signer) return alert('Connect first');
                     const isFake = FAKE_USERS.some(u => u.address.toLowerCase() === recipient.toLowerCase());
@@ -515,12 +622,10 @@
                     }
 
                     postsList.innerHTML = filteredPosts.map(post => {
-                        // Determine card style
                         let cardClass = 'card';
                         if (post.type === 'donation') cardClass = 'card donation-card';
                         if (post.type === 'swap') cardClass = 'card swap-card';
 
-                        // Follow button logic
                         const hasTippedAuthor = userAddress ? hasTipped(userAddress, post.author) : false;
                         let followButton = '';
                         if (userAddress && post.author && post.author !== userAddress) {
@@ -531,7 +636,6 @@
                             }
                         }
 
-                        // Format content based on type
                         let displayContent = post.content;
                         if (post.type === 'donation') {
                             displayContent = `<span class="badge badge-donation">Donation</span> ${post.content}`;
@@ -617,6 +721,374 @@
                         postContent.value = '';
                         postImage.value = '';
                         renderFeed();
+                    });
+                }
+
+                // === MARKET & EVENTS FUNCTIONS ===
+                function renderMarket() {
+                    // Browse Stores
+                    const browseStores = document.getElementById('browseStores');
+                    browseStores.innerHTML = stores.map(store => `
+                        <div class="card store-card">
+                            <h4>${store.name} <span class="badge badge-store">Store</span></h4>
+                            <p>${store.description}</p>
+                            <p><small>Owner: ${store.ownerName || store.owner.slice(0,6)}</small></p>
+                            <div class="store-items">
+                                ${store.items.map(item => `
+                                    <div class="store-item">
+                                        <div>
+                                            <strong>${item.name}</strong><br>
+                                            <small>${item.description}</small>
+                                        </div>
+                                        <div>
+                                            <span class="price-tag">${item.price} FUND</span>
+                                            <button class="buy-item-btn" data-store="${store.id}" data-item="${item.id}">Buy</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('');
+
+                    // Browse Events
+                    const browseEvents = document.getElementById('browseEvents');
+                    browseEvents.innerHTML = events.map(event => `
+                        <div class="card event-card">
+                            <h4>${event.title} <span class="badge badge-event">Event</span></h4>
+                            <p>${event.description}</p>
+                            <p><strong>Date:</strong> ${new Date(event.date).toLocaleString()}</p>
+                            <p><strong>Location:</strong> ${event.location}</p>
+                            <p><strong>Price:</strong> ${event.ticketPrice} FUND</p>
+                            <p><strong>Tickets Available:</strong> ${event.tickets - event.sold} / ${event.tickets}</p>
+                            <p><small>Organizer: ${event.ownerName || event.owner.slice(0,6)}</small></p>
+                            <button class="buy-ticket-btn" data-event="${event.id}">Buy Ticket</button>
+                        </div>
+                    `).join('');
+
+                    // Add event listeners for buy buttons
+                    document.querySelectorAll('.buy-item-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const storeId = btn.dataset.store;
+                            const itemId = btn.dataset.item;
+                            buyItem(storeId, itemId);
+                        });
+                    });
+
+                    document.querySelectorAll('.buy-ticket-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const eventId = btn.dataset.event;
+                            buyTicket(eventId);
+                        });
+                    });
+
+                    // Show/hide sections based on user
+                    if (userAddress) {
+                        // Filter user's stores
+                        const userStores = stores.filter(s => s.owner === userAddress);
+                        const myStoresSection = document.getElementById('myStoresSection');
+                        const myStoresList = document.getElementById('myStoresList');
+                        
+                        if (userStores.length > 0) {
+                            myStoresSection.style.display = 'block';
+                            myStoresList.innerHTML = userStores.map(store => `
+                                <div class="store-item">
+                                    <div>
+                                        <strong>${store.name}</strong><br>
+                                        <small>${store.items.length} items | Total value: ${store.items.reduce((sum, i) => sum + (i.price * i.quantity), 0)} FUND</small>
+                                    </div>
+                                    <div>
+                                        <button class="manage-store-btn" data-store="${store.id}">Manage</button>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
+
+                        // Filter user's events
+                        const userEvents = events.filter(e => e.owner === userAddress);
+                        const myEventsSection = document.getElementById('myEventsSection');
+                        const myEventsList = document.getElementById('myEventsList');
+                        
+                        if (userEvents.length > 0) {
+                            myEventsSection.style.display = 'block';
+                            myEventsList.innerHTML = userEvents.map(event => `
+                                <div class="event-item">
+                                    <div>
+                                        <strong>${event.title}</strong><br>
+                                        <small>Sold: ${event.sold}/${event.tickets} tickets | Revenue: ${event.sold * event.ticketPrice} FUND</small>
+                                    </div>
+                                    <div>
+                                        <button class="manage-event-btn" data-event="${event.id}">Manage</button>
+                                    </div>
+                                </div>
+                            `).join('');
+                        }
+                    }
+                }
+
+                async function createStore() {
+                    if (!userAddress || !signer) {
+                        alert('Connect wallet first');
+                        return;
+                    }
+                    const name = storeName.value.trim();
+                    const description = storeDescription.value.trim();
+                    if (!name || !description) {
+                        alert('Please fill store name and description');
+                        return;
+                    }
+                    
+                    // Check balance
+                    const balance = await fundContract.balanceOf(userAddress);
+                    const decimals = await fundContract.decimals();
+                    const formattedBalance = ethers.utils.formatUnits(balance, decimals);
+                    
+                    if (parseFloat(formattedBalance) < STORE_CREATION_FEE) {
+                        alert(`Insufficient FUND balance. You need ${STORE_CREATION_FEE} FUND.`);
+                        return;
+                    }
+
+                    try {
+                        // Send fee to admin
+                        const contract = new ethers.Contract(FUND_ADDRESS, [
+                            'function transfer(address to, uint256 amount) returns (bool)'
+                        ], signer);
+                        
+                        const feeWei = ethers.utils.parseUnits(STORE_CREATION_FEE.toString(), decimals);
+                        const tx = await contract.transfer(ADMIN_WALLETS[0], feeWei);
+                        
+                        alert(`Store creation fee sent! Waiting for confirmation...`);
+                        await tx.wait();
+                        
+                        // Create store
+                        const newStore = {
+                            id: Date.now(),
+                            owner: userAddress,
+                            ownerName: userAddress.slice(0,6) + '...',
+                            name,
+                            description,
+                            items: []
+                        };
+                        
+                        stores.push(newStore);
+                        saveData();
+                        
+                        alert('Store created successfully!');
+                        storeName.value = '';
+                        storeDescription.value = '';
+                        
+                        // Show add item section
+                        document.getElementById('addItemSection').style.display = 'block';
+                        updateMyStoresDropdown();
+                        renderMarket();
+                        
+                    } catch (err) {
+                        alert('Error creating store: ' + err.message);
+                    }
+                }
+
+                async function createEvent() {
+                    if (!userAddress || !signer) {
+                        alert('Connect wallet first');
+                        return;
+                    }
+                    const title = eventTitle.value.trim();
+                    const description = eventDescription.value.trim();
+                    const date = eventDate.value;
+                    const location = eventLocation.value.trim();
+                    const price = parseFloat(ticketPrice.value);
+                    const quantity = parseInt(ticketQuantity.value);
+                    
+                    if (!title || !description || !date || !location || !price || !quantity) {
+                        alert('Please fill all event details');
+                        return;
+                    }
+                    
+                    // Check balance
+                    const balance = await fundContract.balanceOf(userAddress);
+                    const decimals = await fundContract.decimals();
+                    const formattedBalance = ethers.utils.formatUnits(balance, decimals);
+                    
+                    if (parseFloat(formattedBalance) < EVENT_CREATION_FEE) {
+                        alert(`Insufficient FUND balance. You need ${EVENT_CREATION_FEE} FUND.`);
+                        return;
+                    }
+
+                    try {
+                        // Send fee to admin
+                        const contract = new ethers.Contract(FUND_ADDRESS, [
+                            'function transfer(address to, uint256 amount) returns (bool)'
+                        ], signer);
+                        
+                        const feeWei = ethers.utils.parseUnits(EVENT_CREATION_FEE.toString(), decimals);
+                        const tx = await contract.transfer(ADMIN_WALLETS[0], feeWei);
+                        
+                        alert(`Event creation fee sent! Waiting for confirmation...`);
+                        await tx.wait();
+                        
+                        // Create event
+                        const newEvent = {
+                            id: Date.now(),
+                            owner: userAddress,
+                            ownerName: userAddress.slice(0,6) + '...',
+                            title,
+                            description,
+                            date,
+                            location,
+                            ticketPrice: price,
+                            tickets: quantity,
+                            sold: 0
+                        };
+                        
+                        events.push(newEvent);
+                        saveData();
+                        
+                        alert('Event created successfully!');
+                        eventTitle.value = '';
+                        eventDescription.value = '';
+                        eventDate.value = '';
+                        eventLocation.value = '';
+                        ticketPrice.value = '';
+                        ticketQuantity.value = '';
+                        
+                        renderMarket();
+                        
+                    } catch (err) {
+                        alert('Error creating event: ' + err.message);
+                    }
+                }
+
+                async function buyItem(storeId, itemId) {
+                    if (!userAddress || !signer) {
+                        alert('Connect wallet first');
+                        return;
+                    }
+                    
+                    const store = stores.find(s => s.id == storeId);
+                    if (!store) return;
+                    
+                    const item = store.items.find(i => i.id == itemId);
+                    if (!item) return;
+                    
+                    if (item.quantity <= 0) {
+                        alert('Item out of stock');
+                        return;
+                    }
+                    
+                    const amount = prompt(`Buy ${item.name} for ${item.price} FUND. Enter amount to pay (you can tip extra):`);
+                    if (!amount || parseFloat(amount) < item.price) {
+                        alert(`Minimum payment is ${item.price} FUND`);
+                        return;
+                    }
+                    
+                    try {
+                        const decimals = await fundContract.decimals();
+                        const contract = new ethers.Contract(FUND_ADDRESS, [
+                            'function transfer(address to, uint256 amount) returns (bool)'
+                        ], signer);
+                        
+                        const amountWei = ethers.utils.parseUnits(amount, decimals);
+                        const tx = await contract.transfer(store.owner, amountWei);
+                        
+                        alert(`Purchase sent! Waiting for confirmation...`);
+                        await tx.wait();
+                        
+                        // Update quantity
+                        item.quantity--;
+                        saveData();
+                        
+                        alert(`Purchase complete! You bought ${item.name}`);
+                        renderMarket();
+                        
+                    } catch (err) {
+                        alert('Error making purchase: ' + err.message);
+                    }
+                }
+
+                async function buyTicket(eventId) {
+                    if (!userAddress || !signer) {
+                        alert('Connect wallet first');
+                        return;
+                    }
+                    
+                    const event = events.find(e => e.id == eventId);
+                    if (!event) return;
+                    
+                    if (event.sold >= event.tickets) {
+                        alert('Event sold out');
+                        return;
+                    }
+                    
+                    const amount = event.ticketPrice;
+                    
+                    try {
+                        const decimals = await fundContract.decimals();
+                        const contract = new ethers.Contract(FUND_ADDRESS, [
+                            'function transfer(address to, uint256 amount) returns (bool)'
+                        ], signer);
+                        
+                        const amountWei = ethers.utils.parseUnits(amount.toString(), decimals);
+                        const tx = await contract.transfer(event.owner, amountWei);
+                        
+                        alert(`Ticket purchase sent! Waiting for confirmation...`);
+                        await tx.wait();
+                        
+                        // Update sold count
+                        event.sold++;
+                        saveData();
+                        
+                        alert(`Ticket purchased! You can attend ${event.title}`);
+                        renderMarket();
+                        
+                    } catch (err) {
+                        alert('Error buying ticket: ' + err.message);
+                    }
+                }
+
+                function updateMyStoresDropdown() {
+                    const userStores = stores.filter(s => s.owner === userAddress);
+                    const dropdown = document.getElementById('myStores');
+                    dropdown.innerHTML = userStores.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                }
+
+                // Event Listeners for Market
+                if (createStoreBtn) {
+                    createStoreBtn.addEventListener('click', createStore);
+                }
+                if (createEventBtn) {
+                    createEventBtn.addEventListener('click', createEvent);
+                }
+                if (addItemBtn) {
+                    addItemBtn.addEventListener('click', async () => {
+                        const storeId = myStores.value;
+                        const name = itemName.value.trim();
+                        const description = itemDescription.value.trim();
+                        const price = parseFloat(itemPrice.value);
+                        const quantity = parseInt(itemQuantity.value);
+                        
+                        if (!storeId || !name || !description || !price || !quantity) {
+                            alert('Please fill all item details');
+                            return;
+                        }
+                        
+                        const store = stores.find(s => s.id == storeId);
+                        if (store) {
+                            store.items.push({
+                                id: Date.now(),
+                                name,
+                                description,
+                                price,
+                                quantity
+                            });
+                            saveData();
+                            
+                            itemName.value = '';
+                            itemDescription.value = '';
+                            itemPrice.value = '';
+                            itemQuantity.value = '';
+                            
+                            alert('Item added successfully!');
+                            renderMarket();
+                        }
                     });
                 }
 
