@@ -207,7 +207,7 @@
                 <div id="postsList"></div>
             </div>
 
-            <!-- Swap Tab (DEX Redirect) -->
+            <!-- Swap Tab (Direct Uniswap Link) -->
             <div id="swapTab" class="tab-content hidden">
                 <h3><i class="fas fa-exchange-alt"></i> Get FUND Tokens</h3>
                 <div class="swap-box">
@@ -223,11 +223,11 @@
                         <select id="toToken" disabled><option value="FUND" selected>FUND</option></select>
                         <input type="text" id="toAmount" placeholder="0.0" readonly>
                     </div>
-                    <button id="swapRedirectBtn" class="secondary" style="width:100%;"><i class="fas fa-external-link-alt"></i> Swap on DEX</button>
+                    <button id="swapRedirectBtn" class="secondary" style="width:100%;"><i class="fas fa-external-link-alt"></i> Swap on Uniswap</button>
                     <div id="swapStatus" style="margin-top:15px;"></div>
                 </div>
                 <div class="card">
-                    <p><i class="fas fa-lightbulb"></i> You'll be redirected to a DEX aggregator where you can complete the swap. Your FUND token is already listed and has liquidity.</p>
+                    <p><i class="fas fa-lightbulb"></i> You'll be redirected to Uniswap – your FUND token has a liquidity pool there (created by Clanker). Complete the swap and return to the app.</p>
                 </div>
             </div>
 
@@ -454,138 +454,4 @@
         document.getElementById('createPostBtn').addEventListener('click', () => {
             if (!userAddress) return alert('Connect first');
             const content = document.getElementById('postContent').value.trim();
-            if (!content) return alert('Content empty');
-            const imageUrl = document.getElementById('postImage').value.trim();
-            posts.push({ id: Date.now(), author: userAddress, username: userAddress.slice(0,6)+'...', content, imageUrl, likes: [], comments: [] });
-            saveData();
-            document.getElementById('postContent').value = '';
-            document.getElementById('postImage').value = '';
-            renderFeed();
-        });
-
-        // ========== CAMPAIGNS ==========
-        function renderCampaigns() {
-            const list = document.getElementById('campaignsList');
-            if (!campaigns.length) {
-                list.innerHTML = '<p>No active campaigns.</p>';
-                return;
-            }
-            list.innerHTML = campaigns.filter(c => c.status === 'active').map(c => `
-                <div class="card">
-                    <h4>${c.title}</h4>
-                    <p>${c.description}</p>
-                    <p>Goal: ${c.goal} FUND</p>
-                    <p>Raised: ${c.raised || 0} FUND</p>
-                    <div class="progress"><div class="progress-bar" style="width:${Math.min(100, ((c.raised||0)/c.goal)*100)}%"></div></div>
-                    <p>Deadline: ${c.deadline}</p>
-                    <div class="post-actions">
-                        <button class="donate-btn" data-creator="${c.creator}" data-id="${c.id}">💰 Donate</button>
-                        <button class="share-btn" data-title="Support ${c.title}" data-text="${c.title}" data-url="${window.location.origin}/campaign/${c.id}">🔗 Share</button>
-                    </div>
-                </div>
-            `).join('');
-            document.querySelectorAll('.donate-btn').forEach(btn => btn.addEventListener('click', () => donate(btn.dataset.creator, btn.dataset.id)));
-            document.querySelectorAll('.share-btn').forEach(btn => btn.addEventListener('click', (e) => shareContent(e.target.dataset)));
-        }
-        document.getElementById('createCampaignBtn').addEventListener('click', () => {
-            if (!userAddress) return alert('Connect first');
-            const title = document.getElementById('campaignTitle').value.trim();
-            const desc = document.getElementById('campaignDescription').value.trim();
-            const goal = parseFloat(document.getElementById('campaignGoal').value);
-            const deadline = document.getElementById('campaignDeadline').value;
-            if (!title || !desc || !goal || !deadline) return alert('Fill all fields');
-            campaigns.push({ id: Date.now(), creator: userAddress, title, description: desc, goal, raised: 0, deadline, status: 'active' });
-            saveData();
-            document.getElementById('campaignTitle').value = '';
-            document.getElementById('campaignDescription').value = '';
-            document.getElementById('campaignGoal').value = '';
-            document.getElementById('campaignDeadline').value = '';
-            renderCampaigns();
-        });
-        async function donate(creator, campaignId) {
-            if (!userAddress) return alert('Connect first');
-            const amount = prompt('Enter amount to donate (FUND):');
-            if (!amount || amount <= 0) return;
-            try {
-                const decimals = await fundContract.decimals();
-                const tx = await fundContract.transfer(creator, ethers.utils.parseUnits(amount, decimals));
-                alert(`Donation sent! Tx: ${tx.hash}`);
-                await tx.wait();
-                const camp = campaigns.find(c => c.id == campaignId);
-                if (camp) { camp.raised = (camp.raised || 0) + parseFloat(amount); saveData(); renderCampaigns(); }
-                alert('Confirmed!');
-            } catch (err) { alert('Error: ' + err.message); }
-        }
-
-        // ========== TIPPING ==========
-        async function sendTip(recipient) {
-            if (!userAddress) return alert('Connect first');
-            const amount = prompt('Enter amount to tip (FUND):');
-            if (!amount || amount <= 0) return;
-            try {
-                const decimals = await fundContract.decimals();
-                const tx = await fundContract.transfer(recipient, ethers.utils.parseUnits(amount, decimals));
-                alert(`Tip sent! Tx: ${tx.hash}`);
-                await tx.wait();
-                alert('Confirmed!');
-            } catch (err) { alert('Error: ' + err.message); }
-        }
-
-        // ========== SHARING ==========
-        function shareContent(data) {
-            const shareData = { title: data.title, text: data.text, url: data.url };
-            if (navigator.share) navigator.share(shareData).catch(() => copyToClipboard(data.url));
-            else copyToClipboard(data.url);
-        }
-        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('Link copied!')); }
-
-        // ========== ADMIN ==========
-        function renderAdminPanels() {
-            if (!isAdmin) return;
-            document.getElementById('adminPostsList').innerHTML = posts.map(p => `<div class="card"><p><strong>${p.author}</strong>: ${p.content}</p><button class="danger" data-id="${p.id}" data-action="deletePost">Delete</button></div>`).join('');
-            document.getElementById('adminCampaignsList').innerHTML = campaigns.map(c => `<div class="card"><h4>${c.title}</h4><p>By: ${c.creator}</p><button class="danger" data-id="${c.id}" data-action="deleteCampaign">Delete</button></div>`).join('');
-            document.querySelectorAll('[data-action="deletePost"]').forEach(btn => btn.addEventListener('click', () => deletePost(btn.dataset.id)));
-            document.querySelectorAll('[data-action="deleteCampaign"]').forEach(btn => btn.addEventListener('click', () => deleteCampaign(btn.dataset.id)));
-        }
-        function deletePost(id) { if (!isAdmin) return; posts = posts.filter(p => p.id != id); saveData(); renderFeed(); renderAdminPanels(); }
-        function deleteCampaign(id) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != id); saveData(); renderCampaigns(); renderAdminPanels(); }
-
-        // ========== DEX REDIRECT SWAP ==========
-        const swapRedirectBtn = document.getElementById('swapRedirectBtn');
-        const fromAmount = document.getElementById('fromAmount');
-        const toAmount = document.getElementById('toAmount');
-        const fromToken = document.getElementById('fromToken');
-        const swapStatus = document.getElementById('swapStatus');
-
-        // Construct Odos swap URL with pre-filled parameters
-        function buildSwapURL() {
-            const amount = fromAmount.value;
-            const from = fromToken.value;
-            if (!amount || amount <= 0) return null;
-
-            // Base Odos URL with your FUND token as output
-            let url = 'https://app.odos.xyz/swap?chainId=8453';
-            url += '&inputCurrency=' + (from === 'ETH' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : USDC_ADDRESS);
-            url += '&outputCurrency=' + FUND_ADDRESS;
-            url += '&inputAmount=' + amount;
-            // Odos also supports exact input
-            return url;
-        }
-
-        swapRedirectBtn.addEventListener('click', () => {
-            if (!userAddress) {
-                swapStatus.innerHTML = '❌ Connect wallet first';
-                return;
-            }
-            const url = buildSwapURL();
-            if (!url) {
-                swapStatus.innerHTML = '❌ Enter a valid amount';
-                return;
-            }
-            // Open in new tab
-            window.open(url, '_blank');
-            swapStatus.innerHTML = '✅ Redirecting to Odos DEX aggregator...';
-        });
-    </script>
-</body>
-</html>
+            if (!content) return
