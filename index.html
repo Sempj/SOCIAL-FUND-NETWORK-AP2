@@ -171,6 +171,7 @@
         i { margin-right: 5px; }
         img { max-width: 100%; border-radius: 15px; }
         .footer { text-align: center; color: rgba(255,255,255,0.8); margin-top: 30px; }
+        #errorLog { color: red; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -182,6 +183,7 @@
             <button id="connectBtn"><i class="fas fa-wallet"></i> Connect Wallet</button>
             <div id="walletInfo" class="wallet-info hidden"></div>
         </div>
+        <div id="errorLog"></div>
 
         <!-- Main App -->
         <div id="app" class="hidden">
@@ -258,6 +260,11 @@
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
     <script>
+        // Global error handler to catch any JS errors
+        window.onerror = function(msg, url, line) {
+            document.getElementById('errorLog').innerHTML += 'Error: ' + msg + ' at line ' + line + '<br>';
+        };
+
         // ================== CONFIG ==================
         const FUND_ADDRESS = '0x06396aa215ef3fa2945c535be9c2ddc4e80a9b07';
         const FUND_ABI = [
@@ -265,17 +272,13 @@
             'function decimals() view returns (uint8)',
             'function balanceOf(address account) view returns (uint256)'
         ];
-        // Admin wallet (your address)
         const ADMIN_WALLETS = ['0x8F1BE8D1331f6968680bC141339bb246f68aD899'];
-
-        // Base token addresses
         const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
         // Global state
         let provider, signer, fundContract, userAddress, isAdmin = false;
         let posts = [], campaigns = [], following = [];
 
-        // Load from localStorage
         function loadData() {
             try {
                 posts = JSON.parse(localStorage.getItem('sfn_posts') || '[]');
@@ -300,29 +303,41 @@
         const feedFollowingBtn = document.getElementById('feedFollowingBtn');
         let currentFeed = 'all';
 
-        // ========== WALLET CONNECTION ==========
+        // ========== ROBUST WALLET CONNECTION ==========
         connectBtn.addEventListener('click', async () => {
-            if (!window.ethereum) {
-                alert('No wallet detected. Open in Trust Wallet browser.');
-                return;
-            }
             try {
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                userAddress = accounts[0];
-                provider = new ethers.providers.Web3Provider(window.ethereum);
-                signer = provider.getSigner();
-
-                const network = await provider.getNetwork();
-                if (network.chainId !== 8453) {
-                    alert('Please switch to Base network (Chain ID 8453).');
+                // Check if ethereum provider exists
+                if (typeof window.ethereum === 'undefined') {
+                    alert('No wallet detected. Please open in Trust Wallet browser.');
                     return;
                 }
 
+                // Request accounts
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (!accounts || accounts.length === 0) {
+                    alert('No accounts found. Please unlock your wallet.');
+                    return;
+                }
+                userAddress = accounts[0];
+
+                // Initialize provider and signer
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+
+                // Check network (Base = 8453)
+                const network = await provider.getNetwork();
+                if (network.chainId !== 8453) {
+                    alert('Please switch to Base network (Chain ID 8453) in your wallet.');
+                    return;
+                }
+
+                // Initialize FUND contract
                 fundContract = new ethers.Contract(FUND_ADDRESS, FUND_ABI, signer);
                 const decimals = await fundContract.decimals();
                 const balance = await fundContract.balanceOf(userAddress);
                 const formattedBalance = ethers.utils.formatUnits(balance, decimals);
 
+                // Display wallet info
                 walletInfo.innerHTML = `
                     <i class="fas fa-check-circle"></i> <strong>Connected:</strong> ${userAddress}<br>
                     <i class="fas fa-coins"></i> <strong>FUND Balance:</strong> ${parseFloat(formattedBalance).toFixed(2)} FUND
@@ -331,13 +346,16 @@
                 connectBtn.style.display = 'none';
                 appDiv.classList.remove('hidden');
 
+                // Admin check
                 isAdmin = ADMIN_WALLETS.includes(userAddress.toLowerCase());
                 if (!isAdmin) adminTab.style.display = 'none';
 
+                // Render UI
                 renderFeed();
                 renderCampaigns();
                 if (isAdmin) renderAdminPanels();
             } catch (err) {
+                console.error(err);
                 alert('Connection error: ' + err.message);
             }
         });
@@ -454,4 +472,142 @@
         document.getElementById('createPostBtn').addEventListener('click', () => {
             if (!userAddress) return alert('Connect first');
             const content = document.getElementById('postContent').value.trim();
-            if (!content) return
+            if (!content) return alert('Content empty');
+            const imageUrl = document.getElementById('postImage').value.trim();
+            posts.push({ id: Date.now(), author: userAddress, username: userAddress.slice(0,6)+'...', content, imageUrl, likes: [], comments: [] });
+            saveData();
+            document.getElementById('postContent').value = '';
+            document.getElementById('postImage').value = '';
+            renderFeed();
+        });
+
+        // ========== CAMPAIGNS ==========
+        function renderCampaigns() {
+            const list = document.getElementById('campaignsList');
+            if (!campaigns.length) {
+                list.innerHTML = '<p>No active campaigns.</p>';
+                return;
+            }
+            list.innerHTML = campaigns.filter(c => c.status === 'active').map(c => `
+                <div class="card">
+                    <h4>${c.title}</h4>
+                    <p>${c.description}</p>
+                    <p>Goal: ${c.goal} FUND</p>
+                    <p>Raised: ${c.raised || 0} FUND</p>
+                    <div class="progress"><div class="progress-bar" style="width:${Math.min(100, ((c.raised||0)/c.goal)*100)}%"></div></div>
+                    <p>Deadline: ${c.deadline}</p>
+                    <div class="post-actions">
+                        <button class="donate-btn" data-creator="${c.creator}" data-id="${c.id}">💰 Donate</button>
+                        <button class="share-btn" data-title="Support ${c.title}" data-text="${c.title}" data-url="${window.location.origin}/campaign/${c.id}">🔗 Share</button>
+                    </div>
+                </div>
+            `).join('');
+            document.querySelectorAll('.donate-btn').forEach(btn => btn.addEventListener('click', () => donate(btn.dataset.creator, btn.dataset.id)));
+            document.querySelectorAll('.share-btn').forEach(btn => btn.addEventListener('click', (e) => shareContent(e.target.dataset)));
+        }
+        document.getElementById('createCampaignBtn').addEventListener('click', () => {
+            if (!userAddress) return alert('Connect first');
+            const title = document.getElementById('campaignTitle').value.trim();
+            const desc = document.getElementById('campaignDescription').value.trim();
+            const goal = parseFloat(document.getElementById('campaignGoal').value);
+            const deadline = document.getElementById('campaignDeadline').value;
+            if (!title || !desc || !goal || !deadline) return alert('Fill all fields');
+            campaigns.push({ id: Date.now(), creator: userAddress, title, description: desc, goal, raised: 0, deadline, status: 'active' });
+            saveData();
+            document.getElementById('campaignTitle').value = '';
+            document.getElementById('campaignDescription').value = '';
+            document.getElementById('campaignGoal').value = '';
+            document.getElementById('campaignDeadline').value = '';
+            renderCampaigns();
+        });
+        async function donate(creator, campaignId) {
+            if (!userAddress) return alert('Connect first');
+            const amount = prompt('Enter amount to donate (FUND):');
+            if (!amount || amount <= 0) return;
+            try {
+                const decimals = await fundContract.decimals();
+                const tx = await fundContract.transfer(creator, ethers.utils.parseUnits(amount, decimals));
+                alert(`Donation sent! Tx: ${tx.hash}`);
+                await tx.wait();
+                const camp = campaigns.find(c => c.id == campaignId);
+                if (camp) { camp.raised = (camp.raised || 0) + parseFloat(amount); saveData(); renderCampaigns(); }
+                alert('Confirmed!');
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        // ========== TIPPING ==========
+        async function sendTip(recipient) {
+            if (!userAddress) return alert('Connect first');
+            const amount = prompt('Enter amount to tip (FUND):');
+            if (!amount || amount <= 0) return;
+            try {
+                const decimals = await fundContract.decimals();
+                const tx = await fundContract.transfer(recipient, ethers.utils.parseUnits(amount, decimals));
+                alert(`Tip sent! Tx: ${tx.hash}`);
+                await tx.wait();
+                alert('Confirmed!');
+            } catch (err) { alert('Error: ' + err.message); }
+        }
+
+        // ========== SHARING ==========
+        function shareContent(data) {
+            const shareData = { title: data.title, text: data.text, url: data.url };
+            if (navigator.share) navigator.share(shareData).catch(() => copyToClipboard(data.url));
+            else copyToClipboard(data.url);
+        }
+        function copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('Link copied!')); }
+
+        // ========== ADMIN ==========
+        function renderAdminPanels() {
+            if (!isAdmin) return;
+            document.getElementById('adminPostsList').innerHTML = posts.map(p => `<div class="card"><p><strong>${p.author}</strong>: ${p.content}</p><button class="danger" data-id="${p.id}" data-action="deletePost">Delete</button></div>`).join('');
+            document.getElementById('adminCampaignsList').innerHTML = campaigns.map(c => `<div class="card"><h4>${c.title}</h4><p>By: ${c.creator}</p><button class="danger" data-id="${c.id}" data-action="deleteCampaign">Delete</button></div>`).join('');
+            document.querySelectorAll('[data-action="deletePost"]').forEach(btn => btn.addEventListener('click', () => deletePost(btn.dataset.id)));
+            document.querySelectorAll('[data-action="deleteCampaign"]').forEach(btn => btn.addEventListener('click', () => deleteCampaign(btn.dataset.id)));
+        }
+        function deletePost(id) { if (!isAdmin) return; posts = posts.filter(p => p.id != id); saveData(); renderFeed(); renderAdminPanels(); }
+        function deleteCampaign(id) { if (!isAdmin) return; campaigns = campaigns.filter(c => c.id != id); saveData(); renderCampaigns(); renderAdminPanels(); }
+
+        // ========== UNISWAP DIRECT LINK SWAP ==========
+        const swapRedirectBtn = document.getElementById('swapRedirectBtn');
+        const fromAmount = document.getElementById('fromAmount');
+        const toAmount = document.getElementById('toAmount');
+        const fromToken = document.getElementById('fromToken');
+        const swapStatus = document.getElementById('swapStatus');
+
+        fromAmount.addEventListener('input', () => {
+            const amount = fromAmount.value;
+            if (amount && parseFloat(amount) > 0) {
+                // Rough estimate (1 ETH ≈ 1000 FUND) – adjust based on your pool
+                toAmount.value = (parseFloat(amount) * 1000).toFixed(4);
+            } else {
+                toAmount.value = '';
+            }
+        });
+
+        swapRedirectBtn.addEventListener('click', () => {
+            if (!userAddress) {
+                swapStatus.innerHTML = '❌ Connect wallet first';
+                return;
+            }
+            const amount = fromAmount.value;
+            const from = fromToken.value;
+            if (!amount || parseFloat(amount) <= 0) {
+                swapStatus.innerHTML = '❌ Enter a valid amount';
+                return;
+            }
+
+            let url = 'https://app.uniswap.org/#/swap?chain=base&outputCurrency=' + FUND_ADDRESS;
+            if (from === 'ETH') {
+                url += '&inputCurrency=ETH';
+            } else {
+                url += '&inputCurrency=' + USDC_ADDRESS;
+            }
+            url += '&exactAmount=' + amount;
+
+            window.open(url, '_blank');
+            swapStatus.innerHTML = '✅ Redirecting to Uniswap...';
+        });
+    </script>
+</body>
+</html>
